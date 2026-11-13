@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type * as schema from '@360events/api/schema';
 import type { Logger } from 'pino';
 import type { ZodType } from 'zod';
 
@@ -31,7 +32,7 @@ interface RegisteredHandler {
 }
 
 export interface WorkerRunnerOptions {
-  database: PostgresJsDatabase;
+  database: PostgresJsDatabase<typeof schema>;
   logger: Logger;
   leaseDurationMs?: number;
   retryDelayMs?: (attempt: number) => number;

@@ -45,6 +45,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/pino-http": "^6.1.0",
@@ -58,9 +59,12 @@
   "dependencies": {
     "@360events/types": "workspace:^",
     "@360events/validators": "workspace:^",
+    "cors": "^2.8.6",
+    "date-fns": "^4.4.0",
     "dotenv": "^18.0.9",
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
+    "helmet": "^8.3.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "postgres": "^4.0.0",
