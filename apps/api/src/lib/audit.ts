@@ -1,5 +1,5 @@
 import { uuidv7 } from 'uuidv7';
-import { auditEvents } from '../db/schema.js';
+import { auditEvents } from '../db/schema/audit-events.schema.js';
 import type { Transaction } from './transitions.js';
 
 // P2-T03: Metadata allow-list/block-list[cite: 4]

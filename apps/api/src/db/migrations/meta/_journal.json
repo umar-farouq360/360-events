@@ -22,6 +22,13 @@
       "when": 1793629672732,
       "tag": "0002_fresh_leo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793704327995,
+      "tag": "0003_large_doctor_strange",
+      "breakpoints": true
     }
   ]
 }

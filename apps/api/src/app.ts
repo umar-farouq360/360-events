@@ -1,7 +1,7 @@
 import express, { type Express } from 'express';
 import { httpLogger } from './lib/logger.js';
 import { healthRouter } from './routes/health.js';
-import { errorHandler } from './middleware/error.js';
+import { errorHandler } from './middleware/error.middleware.js';
 
 export const buildApp = (): Express => {
   const app = express();

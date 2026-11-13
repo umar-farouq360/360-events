@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { databaseUrl } from '../config/database-url.js';
+import * as schema from './schema/index.js';
 
 // Application pool restricts max connections
 export const queryClient = postgres(databaseUrl, {
@@ -9,7 +10,7 @@ export const queryClient = postgres(databaseUrl, {
   connect_timeout: 10
 });
 
-export const db = drizzle(queryClient);
+export const db = drizzle(queryClient, { schema });
 
 export const closeDatabase = async (): Promise<void> => {
   await queryClient.end({ timeout: 5 });

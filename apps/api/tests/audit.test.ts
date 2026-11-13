@@ -6,7 +6,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { queryClient } from '../src/db/index.js';
 import { databaseUrl } from '../src/config/database-url.js';
-import { auditEvents } from '../src/db/schema.js';
+import { auditEvents } from '../src/db/schema/audit-events.schema.js';
 import { recordAudit, validateMetadata } from '../src/lib/audit.js';
 
 const auditSchema = `audit_test_${randomUUID().replaceAll('-', '')}`;

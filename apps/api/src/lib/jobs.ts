@@ -1,5 +1,5 @@
 import { uuidv7 } from 'uuidv7';
-import { outboxEvents } from '../db/schema.js';
+import { outboxEvents } from '../db/schema/outbox-events.schema.js';
 import type { Transaction } from './transitions.js';
 
 export interface EnqueueOptions {
