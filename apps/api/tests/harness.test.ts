@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Sql } from 'postgres';
 import {
   closeConcurrencyConnections,
@@ -11,7 +11,11 @@ describe('PostgreSQL concurrency harness', () => {
 
   beforeAll(async () => {
     connections = openConcurrencyConnections(2);
-    await connections[0]!.unsafe(`
+    const conn = connections[0];
+    if (!conn) {
+      throw new Error('Expected at least one connection');
+    }
+    await conn.unsafe(`
       CREATE TABLE concurrency_harness_rows (
         id text PRIMARY KEY,
         value integer NOT NULL
@@ -21,20 +25,31 @@ describe('PostgreSQL concurrency harness', () => {
 
   afterAll(async () => {
     try {
-      await connections[0]?.unsafe('DROP TABLE IF EXISTS concurrency_harness_rows');
-    } catch (err) {
-      // Optionally log the error or ignore if the connection is already closed
+      const conn = connections[0];
+      if (conn) {
+        await conn.unsafe('DROP TABLE IF EXISTS concurrency_harness_rows');
+      }
+    } catch {
+      // Optionally ignore if the connection is already closed
     }
     await closeConcurrencyConnections(connections);
   });
 
   afterEach(async () => {
     // Clean up all rows after each test to avoid interference
-    await connections?.[0]?.unsafe('DELETE FROM concurrency_harness_rows');
+    const conn = connections[0];
+    if (conn) {
+      await conn.unsafe('DELETE FROM concurrency_harness_rows');
+    }
   });
 
   it('uses independent physical PostgreSQL connections', async () => {
-    const [first, second] = connections;
+    const first = connections[0];
+    const second = connections[1];
+    if (!first || !second) {
+      throw new Error('Expected at least two connections');
+    }
+
     const [firstPid, secondPid] = await Promise.all([
       first<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`,
       second<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`,
@@ -46,7 +61,12 @@ describe('PostgreSQL concurrency harness', () => {
   });
 
   it('skips a row locked by another transaction instead of blocking', async () => {
-    const [locker, contender] = connections;
+    const locker = connections[0];
+    const contender = connections[1];
+    if (!locker || !contender) {
+      throw new Error('Expected at least two connections');
+    }
+
     const rowId = randomUUID();
     await locker`
       INSERT INTO concurrency_harness_rows (id, value)
@@ -77,7 +97,7 @@ describe('PostgreSQL concurrency harness', () => {
 
     try {
       await lockAcquired;
-      const skipped = await contender<{ id: string }>`
+      const skipped = await contender<{ id: string }[]>`
         SELECT id
         FROM concurrency_harness_rows
         WHERE id = ${rowId}
