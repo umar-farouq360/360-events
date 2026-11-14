@@ -1,0 +1,245 @@
+360EVENTS — PHASE 1 & PHASE 2 IMPLEMENTATION AUDIT
+==================================================
+
+Date: 2026-11-13
+Scope: docs/implementation-plan.md, Phases 1 and 2
+Verdict: NO-GO for Phase 3
+
+
+VERIFICATION SUMMARY
+--------------------
+
+- pnpm typecheck: PASS
+- pnpm lint: FAIL (49 errors)
+- pnpm test: FAIL (7 failed / 41 passed)
+
+Phase 1 and Phase 2 exit criteria are not met, so Phase 3 should not start yet.
+
+
+BLOCKING ISSUES
+---------------
+
+1. MISSING MIGRATIONS FOR PHASE 2 TABLES
+
+   Only migrations 0000-0003 exist (apps/api/src/db/migrations/meta/_journal.json).
+   There is no migration for:
+   - notifications
+   - notification_attempts
+   - rate_limits
+
+   A fresh db:migrate leaves these tables absent, which directly causes the failing
+   tests:
+   - apps/worker/tests/notification-handler.test.ts
+     Error: relation "notification_attempts" does not exist
+   - apps/api/tests/security-middleware.test.ts
+     Error: relation "rate_limits" does not exist
+
+   This breaks P2-T06 and P2-T07 on a clean environment.
+
+2. SECURITY AND AUTHORISATION MIDDLEWARE ARE NOT WIRED INTO THE APP
+
+   apps/api/src/app.ts:6-12 only installs logging, JSON parsing, health routes and
+   the 404 handler. It never calls:
+   - configureSecurity(...)
+     Therefore helmet, CORS, body limits and raw-body support are not active.
+   - registry.verifyNoUnregisteredRoutes(app)
+     Therefore deny-by-default is not enforced at startup.
+
+   The route registry, rate limiter, validation helper and auth middleware exist only
+   as isolated modules/tests. P2-T07 and P2-T08 are not delivered in the running API.
+
+   Also, checkOwnershipOrNotFound throws an error with status = 404, but
+   apps/api/src/middleware/error.middleware.ts:28-39 always returns 500 for anything
+   other than InvalidTransitionError. The documented 404-vs-403 convention does not
+   work yet.
+
+3. LINT IS RED
+
+   pnpm lint fails because:
+   - apps/worker/src/lib/email.js and email.d.ts are committed generated artifacts
+     under src/
+   - apps/worker/tests/notification-handler.test.ts uses cross-app relative imports
+     without .js extensions:
+       ../../api/src/db
+       ../../api/src/db/schema/index
+   - eslint.config.mjs contains apps/api/tests/helpers/*.ts twice
+
+4. CI/DEPLOYMENT PIPELINE IS NOT FUNCTIONAL
+
+   - CI database port is wrong: service maps 5435:5432, but DATABASE_URL uses
+     localhost:5432 (.github/workflows/ci.yml:22,30).
+   - CI runs db:generate before db:migrate. If migrations are missing (as they are
+     now), CI silently generates them instead of failing.
+   - pnpm verify does not run a build, contrary to the plan and PR template.
+   - Staging deployment is entirely mocked with echo statements
+     (.github/workflows/deploy-staging.yml:37-57).
+   - API Dockerfile runs apps/api/dist/server.js, but no server.ts exists; build
+     output is dist/index.js (apps/api/Dockerfile:37).
+   - Database role separation exists only in docs/database-roles.md; no roles/grants
+     are implemented.
+
+5. TEST HARNESS AND DRIFT CHECK ARE WEAKER THAN REQUIRED
+
+   - apps/api/tests/harness.ts only opens connections; it does not isolate a database
+     per run, apply migrations, or truncate between tests.
+   - harness.test.ts does not demonstrate row-lock contention, only two independent
+     SELECTs.
+   - drizzle-kit check is not a true schema-vs-migration drift detector.
+   - Concurrency suites run once, not the required 20 consecutive repetitions.
+
+6. REQUIRED DOCUMENTATION IS MISSING
+
+   Phase 1/2 exit criteria and Phase 3 entry depend on these, but they do not exist:
+   - docs/state-machines.md
+   - docs/decision-register.md
+   - docs/database-design.md
+   - docs/api-contract.md
+   - docs/security-and-privacy.md
+   - docs/adr/
+
+
+PHASE 1 TASK AUDIT
+------------------
+
+P1-T01 Workspace/TS/lint baseline — PARTIAL
+- Workspace, strict TS, no-explicit-any rule and pnpm guard exist.
+- Lint currently fails.
+- No CI check for stray lockfiles.
+
+P1-T02 Database/Drizzle/migrations/test harness — PARTIAL
+- Connection module, Drizzle config, migrations and scripts exist.
+- Test harness lacks isolation, migration application and truncation between tests.
+- No row-lock contention self-test.
+- Drift check is ineffective.
+- Migrations are incomplete (see Blocking Issue 1).
+
+P1-T03 API skeleton — PARTIAL
+- App factory, env validation, logging, health routes and graceful shutdown exist.
+- Missing tests for health, 404, error shape, log redaction and shutdown.
+- index.ts serves as the server entry instead of a separate server.ts.
+
+P1-T04 Quality gate and CI — PARTIAL
+- CI workflow exists.
+- Database port is wrong.
+- Build is not run.
+- Branch protection cannot be verified from the repository.
+- db:generate masks missing migrations.
+
+P1-T05 Worker and web skeletons — PARTIAL
+- Worker and web applications exist.
+- pnpm dev cannot start the API because apps/api has no dev script.
+- Worker always reports processing: true and exposes no registered-handler status.
+- No web component or smoke tests.
+
+P1-T06 Shared packages and contract round trip — PARTIAL
+- packages/types and packages/validators exist.
+- Boundary lint rules exist.
+- Error envelope lives only in packages/types.
+- Pagination schema is not consumed by the API.
+- No type-level test.
+
+P1-T07 Staging and deployment pipeline — NOT MET
+- Deployment is mocked; no real staging deploy or rollback rehearsal.
+- API container command is wrong.
+- Application/migration roles are design-only.
+
+
+PHASE 2 TASK AUDIT
+------------------
+
+P2-T01 Money and rounding primitives — PARTIAL
+- Core arithmetic, rounding and allocation work.
+- Missing explicit API/database conversion helpers with safe-integer guards.
+- Lint rule does not forbid general floating-point arithmetic.
+
+P2-T02 State-transition utility and history — MOSTLY DONE
+- Conditional update, history and invalid-transition handling exist.
+- Concurrency test runs once, not 20 times.
+
+P2-T03 Audit log — PARTIAL
+- Table, database trigger immutability and transaction requirement exist.
+- Metadata check is a shallow blocklist, not the specified per-action allow-list.
+- Nested forbidden keys are not caught.
+- Application-role restriction is not implemented.
+
+P2-T04 Durable jobs and transactional outbox — PARTIAL
+- Strong core: SKIP LOCKED, leases, retry/backoff, dead-letter, dedupe and shutdown.
+- Missing recurring single-flight scheduler.
+- Missing backlog/failure metrics and read-only inspection query.
+- Concurrency suite runs once.
+
+P2-T05 Idempotency framework — PARTIAL
+- Replay, payload mismatch and concurrent in-progress response work.
+- Missing crash recovery for stale in_progress keys.
+- Missing expired-key cleanup.
+- Error responses do not use the standard API error envelope.
+- Acceptance calls for 20 parallel requests; test uses 2.
+
+P2-T06 Email adapter and notification pipeline — NOT MET
+- notification tables lack migrations.
+- Email adapter exists, but processNotificationJob is never registered with the
+  worker runner, so there is no end-to-end worker path.
+- No separate mail-catcher and production adapters.
+
+P2-T07 Security middleware and rate limiting — NOT MET
+- Middleware modules and tests exist.
+- Neither configureSecurity nor rate limiting is used by the real app.
+- rate_limits lacks a migration.
+- Rate limiter fails open on database errors.
+
+P2-T08 Authorisation framework — NOT MET
+- Registry, permission constants and stub auth exist.
+- Startup does not call registry verification.
+- No real route uses the registry.
+- The 404/403 convention is not enforced by the error handler.
+
+
+MINIMUM WORK BEFORE STARTING PHASE 3
+------------------------------------
+
+1. Add missing Drizzle migrations for notifications, notification_attempts and
+   rate_limits. Verify db:migrate from empty and make the notification/security
+   tests pass.
+
+2. Wire configureSecurity, rate limiting/validation and
+   registry.verifyNoUnregisteredRoutes into app.ts. Register health routes through
+   the registry and fail startup on unregistered routes.
+
+3. Map HttpError.status in the global error handler so the 404-vs-403 convention
+   works.
+
+4. Fix lint:
+   - Remove committed email.js and email.d.ts.
+   - Fix worker test imports.
+   - Remove duplicate ESLint glob.
+
+5. Implement idempotency crash/expiry recovery and expired-key cleanup. Align its
+   error responses with the shared API error envelope.
+
+6. Finish P2-T04 requirements: recurring single-flight scheduler, metrics and
+   inspection query. Repeat concurrency suites 20 times.
+
+7. Fix CI:
+   - Correct DATABASE_URL port.
+   - Add build to pnpm verify.
+   - Stop generating migrations in CI.
+   - Add a real drift check.
+
+8. Fix deployment:
+   - Correct the API container entry point.
+   - Either implement staging deployment or explicitly mark P1-T07 incomplete.
+
+9. Add missing P1-T03 tests: health, 404, error shape, log redaction and shutdown.
+   Add P1-T05 dev-flow, worker-status and web tests.
+
+10. Produce missing Phase 0/exit documents, especially state-machines.md,
+    database-design.md, api-contract.md and security-and-privacy.md.
+
+
+NOTES
+-----
+
+- PostgreSQL was started via Docker only to run the test suite and stopped again
+  afterwards. The repository was otherwise left unchanged.
+- Fix the items in order above; items 1-4 are the minimum required before Phase 3
+  can be considered safe to start.

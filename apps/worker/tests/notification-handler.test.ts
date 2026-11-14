@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { processNotificationJob } from '../src/handlers/notification-handler';
-import { db } from '../../api/src/db';
-import { notifications, notificationAttempts } from '../../api/src/db/schema/index';
+import { processNotificationJob } from '../src/handlers/notification-handler.js';
+import { db } from '@360events/api/db';
+import { notifications, notificationAttempts } from '@360events/api/schema';
 import { eq } from 'drizzle-orm';
-import { SmtpEmailProvider } from '../src/lib/email';
+import { SmtpEmailProvider } from '../src/lib/email.js';
 import { uuidv7 } from 'uuidv7';
 
 describe('Notification Pipeline', () => {

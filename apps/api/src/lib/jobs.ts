@@ -29,3 +29,4 @@ export async function enqueue(
     })
     .onConflictDoNothing({ target: outboxEvents.dedupeKey });
 }
+export { deleteExpiredIdempotencyKeys } from './idempotency-cleanup.js';
