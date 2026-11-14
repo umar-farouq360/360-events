@@ -57,7 +57,6 @@ const postgresRateLimitStore: RateLimitStore = {
 };
 
 function sendRateLimitUnavailable(
-  req: Request,
   res: Response,
   requestId: string,
 ): void {
@@ -94,7 +93,7 @@ export function withRateLimit(
           { requestId, policy: policy.name },
           'Rate-limit store returned no counter record',
         );
-        sendRateLimitUnavailable(req, res, requestId);
+        sendRateLimitUnavailable(res, requestId);
         return;
       }
 
