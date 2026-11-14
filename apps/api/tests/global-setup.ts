@@ -69,6 +69,9 @@ export default async function setup(): Promise<void> {
   try {
     // The destructive reset is restricted to an explicitly named *_test database.
     await sql.unsafe('DROP SCHEMA IF EXISTS public CASCADE');
+    // Drizzle stores its applied-migration journal in this schema. Drop it too,
+    // otherwise a second test run would skip migrations after public was reset.
+    await sql.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE');
     await sql.unsafe('CREATE SCHEMA public AUTHORIZATION CURRENT_USER');
 
     const db = drizzle(sql);
