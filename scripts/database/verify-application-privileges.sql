@@ -83,13 +83,47 @@ BEGIN
   IF has_table_privilege('app_service', 'public.db_migrations_history', 'SELECT')
      OR has_table_privilege('app_service', 'public.db_migrations_history', 'INSERT')
      OR has_table_privilege('app_service', 'public.db_migrations_history', 'UPDATE')
-     OR has_table_privilege('app_service', 'public.db_migrations_history', 'DELETE') THEN
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'DELETE')
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'TRUNCATE') THEN
     RAISE EXCEPTION 'app_service must not access db_migrations_history';
   END IF;
 
+  IF has_schema_privilege('app_service', 'drizzle', 'USAGE') THEN
+    RAISE EXCEPTION 'app_service must not use the Drizzle migration schema';
+  END IF;
+
   IF to_regclass('drizzle.__drizzle_migrations') IS NOT NULL
-     AND has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'SELECT') THEN
-    RAISE EXCEPTION 'app_service must not read the Drizzle migration journal';
+     AND (
+       has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'SELECT')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'INSERT')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'UPDATE')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'DELETE')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'TRUNCATE')
+     ) THEN
+    RAISE EXCEPTION 'app_service must not access the Drizzle migration journal';
+  END IF;
+
+  IF NOT has_table_privilege('app_service', 'public.outbox_events', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'DELETE') THEN
+    RAISE EXCEPTION 'app_service is missing required DML privileges on runtime tables';
   END IF;
 
   SELECT count(*)::integer
