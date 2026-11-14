@@ -36,6 +36,9 @@ export const rateLimitPolicies = {
 const postgresRateLimitStore: RateLimitStore = {
   async increment({ key, policy, now }) {
     const nextExpiry = addSeconds(now, policy.durationSeconds);
+    const nowTimestamp = now.toISOString();
+    const nextExpiryTimestamp = nextExpiry.toISOString();
+
     const result = await db
       .insert(rateLimits)
       .values({
@@ -46,8 +49,8 @@ const postgresRateLimitStore: RateLimitStore = {
       .onConflictDoUpdate({
         target: rateLimits.key,
         set: {
-          points: sql`CASE WHEN ${rateLimits.expiresAt} <= ${now} THEN 1 ELSE ${rateLimits.points} + 1 END`,
-          expiresAt: sql`CASE WHEN ${rateLimits.expiresAt} <= ${now} THEN ${nextExpiry} ELSE ${rateLimits.expiresAt} END`,
+          points: sql`CASE WHEN ${rateLimits.expiresAt} <= ${nowTimestamp}::timestamptz THEN 1 ELSE ${rateLimits.points} + 1 END`,
+          expiresAt: sql`CASE WHEN ${rateLimits.expiresAt} <= ${nowTimestamp}::timestamptz THEN ${nextExpiryTimestamp}::timestamptz ELSE ${rateLimits.expiresAt} END`,
         },
       })
       .returning();
