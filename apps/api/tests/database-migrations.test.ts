@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { databaseUrl } from '../src/config/database-url.js';
@@ -25,10 +26,15 @@ describe('clean database migrations', () => {
         rate_limits: 'rate_limits',
       });
 
+      const journalUrl = new URL('../src/db/migrations/meta/_journal.json', import.meta.url);
+      const journal = JSON.parse(await readFile(journalUrl, 'utf8')) as {
+        entries: unknown[];
+      };
       const migrations = await sql`
         SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations
       `;
-      expect(migrations[0]?.count).toBe(5);
+
+      expect(migrations[0]?.count).toBe(journal.entries.length);
     } finally {
       await sql.end({ timeout: 5 });
     }
