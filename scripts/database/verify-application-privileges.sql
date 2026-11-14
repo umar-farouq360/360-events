@@ -7,7 +7,7 @@ DO $$
 DECLARE
   app_role record;
   migration_role record;
-  non_migrator_owned_tables integer;
+  non_migrator_owned_objects integer;
 BEGIN
   SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
     INTO app_role
@@ -127,17 +127,48 @@ BEGIN
   END IF;
 
   SELECT count(*)::integer
-    INTO non_migrator_owned_tables
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-   WHERE n.nspname = 'public'
-     AND c.relkind IN ('r', 'p')
-     AND c.relowner <> (SELECT oid FROM pg_roles WHERE rolname = 'migrator');
+    INTO non_migrator_owned_objects
+    FROM (
+      SELECT c.relowner AS owner_oid
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+         AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+      UNION ALL
+      SELECT t.typowner AS owner_oid
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+       WHERE n.nspname = 'public'
+         AND t.typisdefined
+      UNION ALL
+      SELECT p.proowner AS owner_oid
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+    ) AS application_objects
+   WHERE owner_oid <> (SELECT oid FROM pg_roles WHERE rolname = 'migrator');
 
-  IF non_migrator_owned_tables <> 0 THEN
+  IF non_migrator_owned_objects <> 0 THEN
     RAISE EXCEPTION
-      'Expected all public tables to be owned by migrator; found % table(s) with another owner',
-      non_migrator_owned_tables;
+      'Expected public application objects to be owned by migrator; found % object(s) with another owner',
+      non_migrator_owned_objects;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_namespace
+     WHERE nspname = 'drizzle'
+       AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+  ) THEN
+    RAISE EXCEPTION 'The drizzle schema must be owned by migrator';
+  END IF;
+
+  IF to_regclass('drizzle.__drizzle_migrations') IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_class
+        WHERE oid = to_regclass('drizzle.__drizzle_migrations')
+          AND relowner = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+     ) THEN
+    RAISE EXCEPTION 'The Drizzle migration journal must exist and be owned by migrator';
   END IF;
 END
 $$;
