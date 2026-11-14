@@ -127,7 +127,7 @@ export function withRateLimit(
         { err: error, requestId, policy: policy.name },
         'Rate-limit store is unavailable',
       );
-      sendRateLimitUnavailable(req, res, requestId);
+      sendRateLimitUnavailable(res, requestId);
     }
   };
 }
