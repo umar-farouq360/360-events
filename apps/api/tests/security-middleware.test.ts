@@ -156,9 +156,12 @@ describe('Security & Middleware Framework', () => {
       .set('X-Request-Id', 'store-failure-789');
 
     expect(response.status).toBe(503);
-    expect(response.body.error.code).toBe('RATE_LIMIT_UNAVAILABLE');
-    expect(response.body.error.requestId).toBe('store-failure-789');
-    expect(JSON.stringify(response.body)).not.toContain('database unavailable');
+    const body = response.body as {
+      error: { code: string; requestId: string };
+    };
+    expect(body.error.code).toBe('RATE_LIMIT_UNAVAILABLE');
+    expect(body.error.requestId).toBe('store-failure-789');
+    expect(JSON.stringify(body)).not.toContain('database unavailable');
     expect(response.headers['x-request-id']).toBe('store-failure-789');
   });
 
