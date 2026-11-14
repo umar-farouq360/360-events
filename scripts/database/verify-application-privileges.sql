@@ -9,7 +9,7 @@ DECLARE
   migration_role record;
   non_migrator_owned_objects integer;
 BEGIN
-  SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
+  SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
     INTO app_role
     FROM pg_roles
    WHERE rolname = 'app_service';
@@ -18,11 +18,13 @@ BEGIN
     RAISE EXCEPTION 'Required role app_service does not exist';
   END IF;
 
-  IF app_role.rolsuper OR app_role.rolcreatedb OR app_role.rolcreaterole OR app_role.rolbypassrls THEN
+  IF NOT app_role.rolcanlogin OR app_role.rolinherit OR app_role.rolsuper
+     OR app_role.rolcreatedb OR app_role.rolcreaterole
+     OR app_role.rolreplication OR app_role.rolbypassrls THEN
     RAISE EXCEPTION 'app_service has a prohibited role attribute';
   END IF;
 
-  SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls
+  SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
     INTO migration_role
     FROM pg_roles
    WHERE rolname = 'migrator';
@@ -31,7 +33,9 @@ BEGIN
     RAISE EXCEPTION 'Required role migrator does not exist';
   END IF;
 
-  IF migration_role.rolsuper OR migration_role.rolcreatedb OR migration_role.rolcreaterole OR migration_role.rolbypassrls THEN
+  IF NOT migration_role.rolcanlogin OR migration_role.rolinherit OR migration_role.rolsuper
+     OR migration_role.rolcreatedb OR migration_role.rolcreaterole
+     OR migration_role.rolreplication OR migration_role.rolbypassrls THEN
     RAISE EXCEPTION 'migrator has a prohibited role attribute';
   END IF;
 
