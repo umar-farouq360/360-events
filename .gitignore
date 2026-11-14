@@ -4,3 +4,6 @@ build
 .env
 coverage
 .DS_Store
+apps/*/src/**/*.js
+apps/*/src/**/*.d.ts
+!apps/*/src/**/*.config.js

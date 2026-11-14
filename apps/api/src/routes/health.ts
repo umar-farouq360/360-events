@@ -1,22 +1,23 @@
-import { Router, type Request, type Response, type Router as ExpressRouter } from 'express';
+import type { Request, Response } from 'express';
 import { queryClient } from '../db/index.js';
 import { logger } from '../lib/logger.js';
+import type { RouteDefinition } from '../lib/route-registry.js';
 
-export const healthRouter: ExpressRouter = Router();
-
-// Liveness check - verifies the Express process is running
-healthRouter.get('/live', (req: Request, res: Response) => {
+const live = (_req: Request, res: Response): void => {
   res.status(200).json({ status: 'ok' });
-});
+};
 
-// Readiness check - verifies database connectivity
-healthRouter.get('/ready', async (req: Request, res: Response) => {
+const ready = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Simple query to ensure database connection is healthy
     await queryClient`SELECT 1`;
     res.status(200).json({ status: 'ready' });
   } catch (error) {
     logger.error({ err: error }, 'Readiness check failed');
     res.status(503).json({ status: 'unavailable' });
   }
-});
+};
+
+export const healthRoutes: RouteDefinition[] = [
+  { method: 'get', path: '/health/live',  access: 'public', handlers: [live]  },
+  { method: 'get', path: '/health/ready', access: 'public', handlers: [ready] },
+];

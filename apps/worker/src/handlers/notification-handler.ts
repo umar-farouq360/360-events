@@ -31,26 +31,22 @@ export async function processNotificationJob(
 
   const { messageId, error } = await emailProvider.sendEmail(emailPayload);
 
-  await db.transaction(async (tx) => {
-    await tx.insert(notificationAttempts).values({
-      id: uuidv7(),
-      notificationId: record.id,
-      providerReference: messageId,
-      error: error,
-    });
-
-    if (error) {
-      // Safe logging without tokens/body
-      console.error(`[Notification] Failed to send ${record.type} to ${record.recipient}. Error: ${error}`);
-      await tx.update(notifications)
-        .set({ status: 'failed', updatedAt: sql`NOW()` })
-        .where(eq(notifications.id, record.id));
-      throw new Error(`Email delivery failed for ${notificationId}`); // Triggers job retry
-    } else {
-      console.info(`[Notification] Successfully sent ${record.type} to ${record.recipient}`);
-      await tx.update(notifications)
-        .set({ status: 'sent', updatedAt: sql`NOW()` })
-        .where(eq(notifications.id, record.id));
-    }
+// Always record the attempt; persist the terminal/in-progress status in the same tx.
+await db.transaction(async (tx) => {
+  await tx.insert(notificationAttempts).values({
+    id: uuidv7(),
+    notificationId: record.id,
+    providerReference: messageId ?? null,
+    error: error ?? null,
   });
+
+  await tx.update(notifications)
+    .set({ status: error ? 'failed' : 'sent', updatedAt: sql`NOW()` })
+    .where(eq(notifications.id, record.id));
+});
+
+if (error) {
+  console.error(`[Notification] Failed to send ${record.type} to ${record.recipient}. Error: ${error}`);
+  throw new Error(`Email delivery failed for ${notificationId}`); // outside tx → retry, but state is committed
 }
+console.info(`[Notification] Successfully sent ${record.type} to ${record.recipient}`);}

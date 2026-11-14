@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -33,12 +33,14 @@ beforeAll(async () => {
   await testSql.unsafe(`CREATE SCHEMA ${testSchema}`);
   testSchemaCreated = true;
   await testSql.unsafe(`SET search_path TO ${testSchema}, public`);
-  const migrationFile = new URL('../../api/src/db/migrations/0002_fresh_leo.sql', import.meta.url);
-  const migrationSql = await readFile(migrationFile, 'utf8');
+ const migrationsDir = new URL('../../api/src/db/migrations/', import.meta.url);
+const migrationFiles = (await readdir(migrationsDir))
+  .filter((f) => f.endsWith('.sql'))
+  .sort(); // lexicographic = 0000, 0001, ... 0004
+for (const file of migrationFiles) {
+  const migrationSql = await readFile(new URL(file, migrationsDir), 'utf8');
   await testSql.unsafe(migrationSql.replaceAll('"public".', `"${testSchema}".`));
-  await Promise.all(workerSqlClients.map((client) =>
-    client.unsafe(`SET search_path TO ${testSchema}, public`),
-  ));
+}
 });
 
 afterAll(async () => {
@@ -110,7 +112,8 @@ describe('Durable Jobs and Outbox (P2-T04)', () => {
         const activeCount = (active.get(jobId) ?? 0) + 1;
         active.set(jobId, activeCount);
         maxActive.set(jobId, Math.max(maxActive.get(jobId) ?? 0, activeCount));
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        // Intentionally longer than leaseDurationMs (900ms) to test lease renewal logic.
+                await new Promise((resolve) => setTimeout(resolve, 1200));
         active.set(jobId, (active.get(jobId) ?? 1) - 1);
       });
       return runner;

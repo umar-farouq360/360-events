@@ -13,7 +13,6 @@ export default tseslint.config(
             'vitest.workspace.ts',
             'apps/api/tests/*.ts',
             'apps/api/tests/helpers/*.ts',
-            'apps/api/tests/helpers/*.ts',
             'apps/api/drizzle.config.ts',
             'apps/api/vitest.config.ts',
             'apps/worker/tests/*.ts',

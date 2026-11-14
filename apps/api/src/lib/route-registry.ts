@@ -30,6 +30,11 @@ export interface RouteDefinition {
 class RouteRegistry {
   private registeredPaths = new Set<string>();
 
+  /** Test/DI hook: forget all registered routes. Not for production use. */
+  public reset(): void {
+    this.registeredPaths.clear();
+  }
+
   public register(router: Router, def: RouteDefinition): void {
     const { method, path, access, handlers } = def;
     const routeKey = `${method.toUpperCase()} ${path}`;
