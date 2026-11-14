@@ -120,6 +120,11 @@ describe('Audit Log (P2-T03)', () => {
         reason: 'approved',
         context: [{ accessToken: 'secret' }],
       })).toThrow('Forbidden metadata key rejected: accessToken');
+
+      expect(() => validateMetadata('approve_event', {
+        reason: 'approved',
+        context: [{ apiKey: 'secret' }],
+      })).toThrow('Forbidden metadata key rejected: apiKey');
     });
 
     it('rejects invalid metadata values and malformed reason values', () => {
