@@ -12,7 +12,7 @@ describe('PostgreSQL concurrency harness', () => {
   beforeAll(async () => {
     connections = openConcurrencyConnections(2);
     await connections[0]!.unsafe(`
-      CREATE TABLE IF NOT EXISTS concurrency_harness_rows (
+      CREATE TABLE concurrency_harness_rows (
         id text PRIMARY KEY,
         value integer NOT NULL
       )
@@ -20,6 +20,7 @@ describe('PostgreSQL concurrency harness', () => {
   });
 
   afterAll(async () => {
+    await connections[0]!.unsafe('DROP TABLE IF EXISTS concurrency_harness_rows');
     await closeConcurrencyConnections(connections);
   });
 
