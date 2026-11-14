@@ -6,7 +6,7 @@
 | **Scope** | docs/implementation-plan.md, Phases 1 and 2 |
 | **Compared against** | phase-1-2-audit-findings.txt dated 13 November 2026 and current main source |
 | **Current verdict** | **NO-GO for Phase 3** |
-| **Verification level** | Source inspection only for this update; no commands or tests were executed |
+| **Verification level** | Issue 1 implementation committed; local commands/tests still require execution |
 
 ## 1. Executive summary
 
@@ -61,18 +61,19 @@ The sequence below is dependency- and risk-ordered. Work on one item at a time; 
 
 ### 1. P1-T02 — Make database and test verification trustworthy
 
-**Still outstanding**
-- apps/api/tests/harness.ts only opens independent connections. It does not create/isolate a test database, apply migrations, or clean data between test runs.
-- harness.test.ts proves two connections can run separate SELECT statements; it does not prove row-lock contention or FOR UPDATE SKIP LOCKED behaviour.
-- The configured db:drift-check command is drizzle-kit check; the repository has not demonstrated that this detects schema-to-migration drift.
-- Migration 0004 has not been proven to apply successfully from an empty database.
+**Implemented in the repository; local verification pending**
+- Vitest now targets a dedicated TEST_DATABASE_URL, defaulting to 360events_test on the existing local PostgreSQL port. Global setup refuses to reset a database whose name does not end in _test.
+- Global setup creates the test database if needed, resets only its public schema, and applies all committed Drizzle migrations before API tests.
+- The concurrency harness opens independent single-connection clients and now tests distinct PostgreSQL backend PIDs plus real FOR UPDATE SKIP LOCKED behaviour.
+- A clean-migration integration test checks the expected Phase 1/2 tables and all five Drizzle migration records.
+- db:drift-check now validates the committed snapshot chain and generates a comparison migration in a temporary directory; a generated SQL file fails the check without changing committed migration files.
 
-**Required next action**
-1. Build a repeatable isolated PostgreSQL test setup.
-2. Apply all committed migrations to a clean database as part of the test setup.
-3. Add a real lock-contention / SKIP LOCKED test using independent connections.
-4. Replace or supplement the current drift check with a check that fails when schema changes are not represented by committed migrations.
-5. Run the migration and database tests from a clean state.
+**Still required**
+1. Run the clean test database setup and migration integration test locally.
+2. Run the PostgreSQL row-lock contention test and confirm it completes without blocking.
+3. Run the schema drift check on the unchanged schema and confirm it passes.
+4. Prove the drift check fails when a temporary schema-only change is introduced, then revert that local experiment.
+5. Run API typecheck/lint and the complete workspace test suite; fix any issues found.
 
 **Why first:** later security, audit, idempotency, scheduler, and notification tests are not reliable until the database test foundation is reliable.
 
@@ -236,6 +237,4 @@ The previously missing documents now exist, but existence is not approval or com
 
 ## 7. Immediate next task
 
-Start with **Issue 1: P1-T02 — make database and test verification trustworthy**.
-
-Keep the scope to the test harness, clean migration path, row-lock contention test, and drift detection. Do not combine it with rate-limiter changes or other Phase 2 work. Once Issue 1 is implemented and verified, move to Issue 2 and continue in the order above.
+**Issue 1 implementation is now committed.** The next step is local verification of the isolated test database, clean migrations, PostgreSQL row locking, and schema drift detection. Do not start Issue 2 until those checks pass.
