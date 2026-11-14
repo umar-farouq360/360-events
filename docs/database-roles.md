@@ -12,8 +12,8 @@ Used by the API and worker at runtime.
 - May connect to the application database and use the `public` schema.
 - Receives `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on application tables, subject to explicit exceptions below.
 - Receives `USAGE` and `SELECT` on application sequences.
-- Cannot create schemas, tables, types, functions, or other database objects.
-- Cannot create databases or roles, bypass row-level security, or administer the database.
+- Cannot create schemas, tables, types, functions, temporary tables, or other database objects.
+- Cannot create databases or roles, create schemas at the database level, create temporary tables, bypass row-level security, or administer the database.
 - Has no access to the Drizzle migration journal or `db_migrations_history`.
 - On `audit_events`, may `SELECT` and `INSERT` only. It cannot `UPDATE`, `DELETE`, `TRUNCATE`, add triggers, or change constraints.
 
@@ -30,13 +30,13 @@ Used only by the deployment migration step.
 - Cannot create databases or roles, bypass row-level security, or administer the database.
 - Must never be configured as the API or worker's runtime `DATABASE_URL`.
 
-Neither role is a superuser. Neither role receives `CREATEDB`, `CREATEROLE`, `REPLICATION`, or `BYPASSRLS`.
+Neither role is a superuser. Neither role receives `CREATE` or `TEMPORARY` on the database, `CREATEDB`, `CREATEROLE`, `REPLICATION`, or `BYPASSRLS`. The provisioning script also revokes database-level `CREATE` and `TEMPORARY` from `PUBLIC` for this dedicated database.
 
 ## Provisioning sequence
 
 Run these steps against a dedicated staging database. Do not run them against production or an existing database until its current object owners and grants have been reviewed.
 
-1. Connect as the database owner/administrator.
+1. Connect as a PostgreSQL superuser (or a provider administrator with equivalent CREATEROLE and object-ownership delegation privileges). The provisioning script changes cluster roles and owns the Drizzle schema; an ordinary database owner may not have sufficient authority.
 2. Run `psql "$STAGING_DATABASE_ADMIN_URL" -v ON_ERROR_STOP=1 -f scripts/database/provision-roles.sql`.
 3. Set credentials for `app_service` and `migrator` through the hosting provider's secret manager or approved IAM. Do not place passwords in SQL files, shell history, GitHub workflow YAML, or image layers.
 4. Run Drizzle migrations using the `migrator` connection only: `pnpm --filter @360events/api run db:migrate`.
