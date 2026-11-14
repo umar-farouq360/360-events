@@ -239,4 +239,4 @@ The previously missing documents now exist, but existence is not approval or com
 
 ## 7. Immediate next task
 
-**P2-T03 is the active task.** Complete strict typed metadata validation and local verification on `p2-t03-audit-metadata`. Keep actual database role/grant enforcement under P1-T07; do not treat the append-only trigger as a substitute for database privileges.
+**P2-T03 is implemented and locally verified; PR #13 is ready for review.** After review and merge, continue with P1-T07 database role/grant enforcement. Do not treat the append-only trigger as a substitute for database privileges.
