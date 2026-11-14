@@ -29,6 +29,7 @@ DECLARE
   database_name text := current_database();
 BEGIN
   EXECUTE format('GRANT CONNECT ON DATABASE %I TO app_service, migrator', database_name);
+  EXECUTE format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM PUBLIC, app_service, migrator', database_name);
 END
 $$;
 
