@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 const defaultTestDatabaseUrl =
   'postgres://postgres:postgres@localhost:5435/360events_test';
 
