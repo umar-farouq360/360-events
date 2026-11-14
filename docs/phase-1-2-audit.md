@@ -63,7 +63,7 @@ The sequence below is dependency- and risk-ordered. Work on one item at a time; 
 
 **Implemented in the repository; local verification pending**
 - Vitest now targets a dedicated TEST_DATABASE_URL, defaulting to 360events_test on the existing local PostgreSQL port. Global setup refuses to reset a database whose name does not end in _test.
-- Global setup creates the test database if needed, resets only its public schema, and applies all committed Drizzle migrations before API tests.
+- Global setup creates the test database if needed, resets the public schema and Drizzle migration-journal schema, and reapplies all committed migrations before API tests. Resetting the journal as well ensures repeated test runs do not skip migrations after the application schema is dropped.
 - The concurrency harness opens independent single-connection clients and now tests distinct PostgreSQL backend PIDs plus real FOR UPDATE SKIP LOCKED behaviour.
 - A clean-migration integration test checks the expected Phase 1/2 tables and all five Drizzle migration records.
 - db:drift-check now validates the committed snapshot chain and generates a comparison migration in a temporary directory; a generated SQL file fails the check without changing committed migration files.
