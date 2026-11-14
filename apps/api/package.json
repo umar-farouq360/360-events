@@ -41,7 +41,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:drift-check": "drizzle-kit check",
+    "db:drift-check": "tsx scripts/check-schema-drift.ts",
     "test": "vitest run"
   },
   "devDependencies": {
