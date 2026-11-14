@@ -72,8 +72,10 @@ function assertSafeJsonValue(value: unknown, path: string, depth: number): void 
   }
 
   if (typeof value === 'object') {
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
+    if (
+      Object.getPrototypeOf(value) !== Object.prototype
+      && Object.getPrototypeOf(value) !== null
+    ) {
       throw new Error(`Audit metadata contains a non-plain object at ${path}`);
     }
 
@@ -134,14 +136,14 @@ export function validateMetadata(
         throw new Error('approve_event metadata.reason must be a non-empty string of at most 500 characters');
       }
 
-      return metadata as AuditMetadataByAction[AuditAction];
+      return metadata;
     }
 
     case 'payout':
       if (Object.keys(metadata).length > 0) {
         throw new Error('payout does not accept metadata fields');
       }
-      return metadata as AuditMetadataByAction[AuditAction];
+      return metadata;
 
     default: {
       return assertNever(action);
