@@ -36,14 +36,15 @@ async function ensureDatabaseExists(testDatabaseUrl: string): Promise<void> {
 
   const admin = postgres(maintenance.toString(), { max: 1, connect_timeout: 5 });
   try {
-    const existing = await admin<{ exists: number }[]>\`
-      SELECT 1 AS exists FROM pg_database WHERE datname = ${databaseName}
-    \`;
+    const existing = await admin.unsafe(
+      'SELECT 1 AS exists FROM pg_database WHERE datname = $1',
+      [databaseName],
+    );
 
     if (existing.length === 0) {
       const quotedName = databaseName.replace(/"/g, '""');
       try {
-        await admin.unsafe(\`CREATE DATABASE "${quotedName}"\`);
+        await admin.unsafe('CREATE DATABASE "' + quotedName + '"');
       } catch (error) {
         if (
           typeof error !== 'object' ||
@@ -66,8 +67,9 @@ export default async function setup(): Promise<void> {
 
   const sql = postgres(testDatabaseUrl, { max: 1, connect_timeout: 5 });
   try {
-    await sql\`DROP SCHEMA IF EXISTS public CASCADE\`;
-    await sql\`CREATE SCHEMA public AUTHORIZATION CURRENT_USER\`;
+    // The destructive reset is restricted to an explicitly named *_test database.
+    await sql.unsafe('DROP SCHEMA IF EXISTS public CASCADE');
+    await sql.unsafe('CREATE SCHEMA public AUTHORIZATION CURRENT_USER');
 
     const db = drizzle(sql);
     await migrate(db, {
@@ -75,7 +77,7 @@ export default async function setup(): Promise<void> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(\`[TEST DATABASE] Failed to reset and migrate the test database: ${message}\`);
+    throw new Error('[TEST DATABASE] Failed to reset and migrate the test database: ' + message);
   } finally {
     await sql.end({ timeout: 5 });
   }
