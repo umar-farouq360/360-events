@@ -1,16 +1,76 @@
-# Database Role Design Note
+# PostgreSQL Role Design
 
-In accordance with P1-T02, the production environment will strictly separate DDL (schema migrations) from DML (application data access) to ensure least privilege.
+This document defines the runtime/migration privilege boundary for P1-T07. PostgreSQL roles are provisioned separately from Drizzle schema migrations because roles are cluster-level security principals, not application tables.
 
-## 1. Migration Role (`migrator`)
-- **Purpose:** Executes `drizzle-kit migrate`.
-- **Permissions:** `CREATE`, `ALTER`, `DROP` on tables, indexes, constraints, and sequences within the `public` schema.
-- **Access:** Only injected into the ephemeral deployment pipeline runner. Never exposed to the running application services.
+## Roles
 
-## 2. Application Role (`app_service`)
-- **Purpose:** Used by the Express API and Background Worker.
-- **Permissions:** `SELECT`, `INSERT`, `UPDATE`, `DELETE` on all tables in the `public` schema. 
-- **Restrictions:** 
-  - Strictly **DENIED** `DROP`, `ALTER`, and `TRUNCATE` permissions.
-  - Cannot modify the Drizzle migration tracking tables.
-  - Required to enforce the immutability of the `audit_events` and financial ledger tables at the Postgres role level in Phase 2 and 7[cite: 4].
+### `app_service`
+
+Used by the API and worker at runtime.
+
+- Login role; credentials are supplied only through the hosting platform's secret manager or an approved database IAM mechanism.
+- May connect to the application database and use the `public` schema.
+- Receives `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on application tables, subject to explicit exceptions below.
+- Receives `USAGE` and `SELECT` on application sequences.
+- Cannot create schemas, tables, types, functions, or other database objects.
+- Cannot create databases or roles, bypass row-level security, or administer the database.
+- Has no access to the Drizzle migration journal or `db_migrations_history`.
+- On `audit_events`, may `SELECT` and `INSERT` only. It cannot `UPDATE`, `DELETE`, `TRUNCATE`, add triggers, or change constraints.
+
+The API and worker currently share this runtime role. A later task may split them if their data-access requirements diverge.
+
+### `migrator`
+
+Used only by the deployment migration step.
+
+- Login role; credentials are supplied only through the hosting platform's secret manager or an approved database IAM mechanism.
+- May connect and create/alter objects in the application schema.
+- Owns objects created by Drizzle migrations. This ownership is required for later migrations to alter those objects without granting DDL rights to the runtime role.
+- Owns the isolated `drizzle` schema and its migration journal.
+- Cannot create databases or roles, bypass row-level security, or administer the database.
+- Must never be configured as the API or worker's runtime `DATABASE_URL`.
+
+Neither role is a superuser. Neither role receives `CREATEDB`, `CREATEROLE`, `REPLICATION`, or `BYPASSRLS`.
+
+## Provisioning sequence
+
+Run these steps against a dedicated staging database. Do not run them against production or an existing database until its current object owners and grants have been reviewed.
+
+1. Connect as the database owner/administrator.
+2. Run `psql "$STAGING_DATABASE_ADMIN_URL" -v ON_ERROR_STOP=1 -f scripts/database/provision-roles.sql`.
+3. Set credentials for `app_service` and `migrator` through the hosting provider's secret manager or approved IAM. Do not place passwords in SQL files, shell history, GitHub workflow YAML, or image layers.
+4. Run Drizzle migrations using the `migrator` connection only: `pnpm --filter @360events/api run db:migrate`.
+5. Connect as `migrator` (or the database administrator) and run `psql "$STAGING_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/database/grant-application-privileges.sql`.
+6. Run `psql "$STAGING_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/database/verify-application-privileges.sql`.
+7. Configure API and worker `DATABASE_URL` with the `app_service` connection string. Configure only the deployment migration step with the `migrator` connection string.
+
+The provisioning script creates login roles without passwords. This is intentional: credentials must be generated and stored outside source control. The script is safe to re-run for role attributes and grants, but it does not transfer ownership of an existing schema created by another role.
+
+### Existing databases
+
+Do not point `migrator` at a database whose tables are owned by another role and assume it can alter them. PostgreSQL object ownership is not equivalent to ordinary DML grants. For an already-migrated database, first inventory ownership of every table, sequence, enum/type, function, and the Drizzle journal. Prepare and review a one-time owner-transfer procedure with the current database owner before changing it. The staging setup should preferably use a fresh database and apply all migrations as `migrator`.
+
+## Default privileges
+
+`provision-roles.sql` configures default privileges for objects created directly by `migrator` in `public`:
+
+- Tables: `SELECT`, `INSERT`, `UPDATE`, `DELETE` for `app_service`.
+- Sequences: `USAGE`, `SELECT` for `app_service`.
+- Types: `USAGE` for `app_service`.
+
+These defaults do not apply when migrations run as `postgres`, another owner, or a role that is merely a member of `migrator` without creating objects as `migrator`. Always use the `migrator` login directly for Drizzle migrations.
+
+After migrations, `grant-application-privileges.sql` applies current-table grants and removes runtime access to audit and migration bookkeeping tables. The audit exception must remain in place after every privilege change.
+
+## Verification
+
+Run `scripts/database/verify-application-privileges.sql` after provisioning and migrations. It fails if:
+
+- Either role has superuser, database-creation, role-creation, or row-security-bypass privileges.
+- `app_service` can create objects in `public` or create databases.
+- `app_service` can update, delete, truncate, or otherwise modify `audit_events`.
+- `app_service` cannot read/insert audit rows.
+- `app_service` can access migration bookkeeping.
+- Public application tables are not owned by `migrator`.
+
+This script is a staging verification step, not proof that a hosting provider has injected the correct credentials into the running containers. Verify runtime connection identities separately during the staging rehearsal.

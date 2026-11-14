@@ -14,7 +14,7 @@ COPY apps/api/ apps/api/
 # Install dependencies strictly from lockfile
 RUN pnpm install --frozen-lockfile
 
-# Build the API (requires adding "build": "tsc" to apps/api/package.json)
+# Build the API
 RUN pnpm --filter @360events/api run build
 
 # Stage 2: Runner
@@ -34,4 +34,5 @@ COPY --from=builder --chown=node:node /app/apps/api ./apps/api
 
 EXPOSE 3000
 
-CMD ["node", "apps/api/dist/server.js"]
+# src/index.ts compiles to dist/index.js (tsconfig rootDir=src, outDir=dist).
+CMD ["node", "apps/api/dist/index.js"]
