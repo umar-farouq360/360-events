@@ -80,7 +80,7 @@ export function withRateLimit(
   store: RateLimitStore = postgresRateLimitStore,
 ) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const requestId = String(req.id ?? randomUUID());
+    const requestId = typeof req.id === 'string' ? req.id : randomUUID();
     res.setHeader('X-Request-Id', requestId);
 
     // req.ip is derived from the configured trusted-proxy boundary.

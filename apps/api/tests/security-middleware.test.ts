@@ -112,7 +112,10 @@ describe('Security & Middleware Framework', () => {
 
   it('should fail closed when the rate-limit store returns no counter row', async () => {
     const missingRowStore: RateLimitStore = {
-      increment: async () => undefined,
+      increment: async () => {
+        await Promise.resolve();
+        return undefined;
+      },
     };
     const isolatedApp = express();
     isolatedApp.use(httpLogger);
@@ -140,6 +143,7 @@ describe('Security & Middleware Framework', () => {
   it('should fail closed when the rate-limit store throws', async () => {
     const failingStore: RateLimitStore = {
       increment: async () => {
+        await Promise.resolve();
         throw new Error('database unavailable');
       },
     };
