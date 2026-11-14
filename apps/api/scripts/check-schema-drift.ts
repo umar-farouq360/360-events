@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationRoot = resolve(apiRoot, 'src/db/migrations');
 const temporaryRoot = await mkdtemp(join(tmpdir(), '360events-schema-drift-'));
-const temporaryConfig = resolve(apiRoot, '.drizzle-drift-check.config.ts');
+const temporaryConfig = join(temporaryRoot, 'drizzle.config.ts');
 
 function runDrizzle(args: string[]): boolean {
   const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -77,5 +77,4 @@ try {
   }
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
-  await rm(temporaryConfig, { force: true });
 }
