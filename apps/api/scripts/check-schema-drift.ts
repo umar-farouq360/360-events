@@ -40,7 +40,7 @@ try {
 
   await writeFile(
     temporaryConfig,
-    'export default ' + JSON.stringify(config, null, 2) + ';\\n',
+    'export default ' + JSON.stringify(config, null, 2) + ';\n',
     'utf8',
   );
 
@@ -62,7 +62,7 @@ try {
 
   if (generatedSql.length > 0) {
     console.error(
-      '\\n[SCHEMA DRIFT] The TypeScript schema contains changes missing from committed migrations.',
+      '\n[SCHEMA DRIFT] The TypeScript schema contains changes missing from committed migrations.',
     );
     console.error('Generated preview migration(s):');
     for (const file of generatedSql) {
