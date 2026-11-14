@@ -93,17 +93,59 @@ describe('Audit Log (P2-T03)', () => {
   });
 
   describe('Metadata Validation', () => {
-    it('rejects forbidden metadata keys', () => {
-      expect(() => validateMetadata({ password: '123' }))
-        .toThrow('Forbidden metadata key rejected: password');
-      
-      expect(() => validateMetadata({ TOKEN: 'abc', safeKey: 'val' }))
-        .toThrow('Forbidden metadata key rejected: TOKEN');
+    it('accepts the declared approve_event metadata shape', () => {
+      expect(validateMetadata('approve_event', { reason: 'Reviewed and approved' }))
+        .toEqual({ reason: 'Reviewed and approved' });
+      expect(validateMetadata('approve_event', {})).toEqual({});
     });
 
-    it('allows safe metadata keys', () => {
-      const safe = { reason: 'user requested', changes: { status: 'active' } };
-      expect(() => validateMetadata(safe)).not.toThrow();
+    it('accepts payout only when metadata is empty', () => {
+      expect(validateMetadata('payout', {})).toEqual({});
+    });
+
+    it('rejects unknown top-level metadata keys', () => {
+      expect(() => validateMetadata('approve_event', { reason: 'approved', status: 'active' }))
+        .toThrow('Unknown metadata key for approve_event: status');
+      expect(() => validateMetadata('payout', { reference: 'po_123' }))
+        .toThrow('payout does not accept metadata fields');
+    });
+
+    it('rejects sensitive keys at any nesting depth, including objects inside arrays', () => {
+      expect(() => validateMetadata('approve_event', {
+        reason: 'approved',
+        context: { nested: { password: 'secret' } },
+      })).toThrow('Forbidden metadata key rejected: password');
+
+      expect(() => validateMetadata('approve_event', {
+        reason: 'approved',
+        context: [{ accessToken: 'secret' }],
+      })).toThrow('Forbidden metadata key rejected: accessToken');
+    });
+
+    it('rejects invalid metadata values and malformed reason values', () => {
+      expect(() => validateMetadata('approve_event', null)).toThrow('Audit metadata must be a plain object');
+      expect(() => validateMetadata('approve_event', { reason: 42 }))
+        .toThrow('approve_event metadata.reason must be a non-empty string');
+      expect(() => validateMetadata('approve_event', { reason: '   ' }))
+        .toThrow('approve_event metadata.reason must be a non-empty string');
+      expect(() => validateMetadata('approve_event', { reason: 'x'.repeat(501) }))
+        .toThrow('approve_event metadata.reason must be a non-empty string');
+      expect(() => validateMetadata('approve_event', { reason: 'approved', value: Number.NaN }))
+        .toThrow('Audit metadata contains a non-finite number');
+    });
+
+    it('rejects excessive nesting', () => {
+      let value: Record<string, unknown> = { password: 'blocked' };
+      for (let index = 0; index < 10; index += 1) {
+        value = { nested: value };
+      }
+      expect(() => validateMetadata('approve_event', value))
+        .toThrow('Audit metadata exceeds maximum nesting depth');
+    });
+
+    it('rejects unsupported runtime action values', () => {
+      expect(() => validateMetadata('not_a_real_action' as never, {}))
+        .toThrow('Unsupported audit action');
     });
   });
 
@@ -134,14 +176,14 @@ describe('Audit Log (P2-T03)', () => {
         await recordAudit(tx as Parameters<typeof recordAudit>[0], {
           actorType: 'system',
           actorId: 'sys_0',
-          action: 'fail_test',
-          entity: 'none',
-          outcome: 'pending'
+          action: 'approve_event',
+          entity: 'evt_rollback',
+          outcome: 'pending',
         });
         throw new Error('Simulated business transaction failure');
       })).rejects.toThrow('Simulated business transaction failure');
 
-      const rows = await auditDb.select().from(auditEvents).where(eq(auditEvents.action, 'fail_test'));
+      const rows = await auditDb.select().from(auditEvents).where(eq(auditEvents.entity, 'evt_rollback'));
       const businessRows = await auditDb.select().from(businessFixture).where(eq(businessFixture.id, 'rolled-back'));
       expect(rows).toHaveLength(0);
       expect(businessRows).toHaveLength(0);
