@@ -39,8 +39,28 @@ BEGIN
     RAISE EXCEPTION 'app_service must not have CREATE on public';
   END IF;
 
-  IF has_database_privilege('app_service', current_database(), 'CREATE') THEN
-    RAISE EXCEPTION 'app_service must not have CREATE on the database';
+  IF has_database_privilege('app_service', current_database(), 'CREATE')
+     OR has_database_privilege('app_service', current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'app_service must not create database objects or temporary tables';
+  END IF;
+
+  IF has_database_privilege('migrator', current_database(), 'CREATE')
+     OR has_database_privilege('migrator', current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'migrator must not create databases/schemas or temporary tables';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members
+     WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'app_service')
+  ) THEN
+    RAISE EXCEPTION 'app_service must not inherit or SET ROLE into another role';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members
+     WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+  ) THEN
+    RAISE EXCEPTION 'migrator must not inherit or SET ROLE into another role';
   END IF;
 
   IF NOT has_schema_privilege('migrator', 'public', 'CREATE') THEN
