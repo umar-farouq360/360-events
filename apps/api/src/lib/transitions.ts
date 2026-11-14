@@ -5,7 +5,9 @@ import type {
   PgUpdateSetSource, 
   PgTransaction 
 } from 'drizzle-orm/pg-core';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js';
+import type * as schema from '../db/schema/index.js';
 
 /**
  * Custom error for invalid lifecycle transitions.
@@ -44,9 +46,9 @@ export function assertCanTransition<T extends string>(
  * Strictly types the Drizzle transaction object specifically for the postgres-js driver.
  */
 export type Transaction = PgTransaction<
-  PostgresJsQueryResultHKT, 
-  Record<string, never>, 
-  Record<string, never>
+  PostgresJsQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
 >;
 
 /**
