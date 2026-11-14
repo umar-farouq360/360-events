@@ -1,5 +1,6 @@
--- Run once against the target database as its database owner or a PostgreSQL
--- administrator, before applying Drizzle migrations.
+-- Run once against the target database as a PostgreSQL superuser or a provider
+-- administrator with equivalent role-creation and object-ownership authority,
+-- before applying Drizzle migrations.
 --
 -- This script creates login roles without passwords. Provision credentials through
 -- the hosting provider's secret manager or an approved IAM mechanism; never add
