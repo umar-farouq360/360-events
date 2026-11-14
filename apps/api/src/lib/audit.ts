@@ -32,7 +32,7 @@ export type AuditPayload = {
 }[AuditAction];
 
 const FORBIDDEN_KEY_PATTERN =
-  /(?:^|_)(?:password|token|secret|authorization|cookie|credential|private_key|session)(?:$|_)/;
+  /(?:^|_)(?:password|token|secret|authorization|auth|cookie|credential|api_key|access_key|private_key|session)(?:$|_)/;
 
 const MAX_METADATA_DEPTH = 8;
 const MAX_REASON_LENGTH = 500;
@@ -105,10 +105,14 @@ function assertMetadataObject(metadata: unknown): asserts metadata is Record<str
  * Validates JSON safety and the action-specific metadata contract.
  * Unknown actions and fields fail closed.
  */
-export function validateMetadata<Action extends AuditAction>(
-  action: Action,
+function assertNever(value: never): never {
+  throw new Error(`Unsupported audit action: ${String(value)}`);
+}
+
+export function validateMetadata(
+  action: AuditAction,
   metadata: unknown
-): AuditMetadataByAction[Action] {
+): AuditMetadataByAction[AuditAction] {
   assertMetadataObject(metadata);
   assertSafeJsonValue(metadata, 'metadata', 0);
 
@@ -130,7 +134,7 @@ export function validateMetadata<Action extends AuditAction>(
         throw new Error('approve_event metadata.reason must be a non-empty string of at most 500 characters');
       }
 
-      return metadata as AuditMetadataByAction[Action];
+      return metadata as AuditMetadataByAction[AuditAction];
     }
 
     case 'payout':
@@ -140,8 +144,7 @@ export function validateMetadata<Action extends AuditAction>(
       return metadata as AuditMetadataByAction[Action];
 
     default: {
-      const exhaustiveAction: never = action;
-      throw new Error(`Unsupported audit action: ${String(exhaustiveAction)}`);
+      return assertNever(action);
     }
   }
 }
