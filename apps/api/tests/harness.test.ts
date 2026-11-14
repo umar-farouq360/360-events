@@ -1,32 +1,82 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { openConcurrencyConnections, closeConcurrencyConnections } from './harness.js';
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type postgres from 'postgres';
+import {
+  closeConcurrencyConnections,
+  openConcurrencyConnections,
+} from './harness.js';
 
-describe('Concurrency Test Harness', () => {
-  let concurrentConns: postgres.Sql[];
+describe('PostgreSQL concurrency harness', () => {
+  let connections: postgres.Sql[];
 
-  beforeAll(() => {
-    concurrentConns = openConcurrencyConnections(2);
+  beforeAll(async () => {
+    connections = openConcurrencyConnections(2);
+    await connections[0]!.unsafe(`
+      CREATE TABLE IF NOT EXISTS concurrency_harness_rows (
+        id text PRIMARY KEY,
+        value integer NOT NULL
+      )
+    `);
   });
 
   afterAll(async () => {
-    await closeConcurrencyConnections(concurrentConns);
+    await closeConcurrencyConnections(connections);
   });
 
-  it('proves independent connections can be spawned for concurrency scenarios', async () => {
-    expect(concurrentConns).toHaveLength(2);
-    
-    const [conn1, conn2] = concurrentConns;
+  it('uses independent physical PostgreSQL connections', async () => {
+    const [first, second] = connections;
+    const [firstPid, secondPid] = await Promise.all([
+      first`SELECT pg_backend_pid() AS pid`,
+      second`SELECT pg_backend_pid() AS pid`,
+    ]);
 
-    if (!conn1 || !conn2) {
-      throw new Error('Expected two independent database connections.');
+    expect(firstPid[0]?.pid).toBeTypeOf('number');
+    expect(secondPid[0]?.pid).toBeTypeOf('number');
+    expect(firstPid[0]?.pid).not.toBe(secondPid[0]?.pid);
+  });
+
+  it('skips a row locked by another transaction instead of blocking', async () => {
+    const [locker, contender] = connections;
+    const rowId = randomUUID();
+    await locker`
+      INSERT INTO concurrency_harness_rows (id, value)
+      VALUES (${rowId}, 1)
+    `;
+
+    let signalLockAcquired!: () => void;
+    let releaseLock!: () => void;
+    const lockAcquired = new Promise<void>((resolve) => {
+      signalLockAcquired = resolve;
+    });
+    const lockRelease = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    const lockTransaction = locker.begin(async (transaction) => {
+      await transaction`
+        SELECT id
+        FROM concurrency_harness_rows
+        WHERE id = ${rowId}
+        FOR UPDATE
+      `;
+      signalLockAcquired();
+      await lockRelease;
+    });
+
+    try {
+      await lockAcquired;
+      const skipped = await contender`
+        SELECT id
+        FROM concurrency_harness_rows
+        WHERE id = ${rowId}
+        FOR UPDATE SKIP LOCKED
+      `;
+
+      expect(skipped).toHaveLength(0);
+    } finally {
+      releaseLock();
+      await lockTransaction;
+      await locker`DELETE FROM concurrency_harness_rows WHERE id = ${rowId}`;
     }
-    
-    // Simple proof of independent execution 
-    const res1 = await conn1`SELECT 1 as val`;
-    const res2 = await conn2`SELECT 2 as val`;
-    
-    expect(res1[0]?.val).toBe(1);
-    expect(res2[0]?.val).toBe(2);
   });
 });
