@@ -1,13 +1,13 @@
 import { cp, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationRoot = resolve(apiRoot, 'src/db/migrations');
-const temporaryRoot = await mkdtemp(join(tmpdir(), '360events-schema-drift-'));
-const temporaryConfig = join(temporaryRoot, 'drizzle.config.ts');
+let temporaryRoot: string | undefined;
+let temporaryConfig: string;
 
 function runDrizzle(args: string[]): boolean {
   const executable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -26,13 +26,18 @@ function runDrizzle(args: string[]): boolean {
 }
 
 try {
+  temporaryRoot = await mkdtemp(join(tmpdir(), '360events-schema-drift-'));
+  temporaryConfig = join(temporaryRoot, 'drizzle.config.ts');
   // Seed the temporary output with committed snapshots so Drizzle compares
   // the current TypeScript schema against the latest committed schema state.
   await cp(join(migrationRoot, 'meta'), join(temporaryRoot, 'meta'), { recursive: true });
 
   const config = {
     schema: resolve(apiRoot, 'src/db/schema/index.ts'),
-    out: temporaryRoot,
+    // drizzle-kit resolves relative `out` paths from the current working
+    // directory. Keep it relative so its internal `./${path}` reads do not
+    // produce an invalid `.//tmp/...` path for the temporary directory.
+    out: relative(apiRoot, temporaryRoot),
     dialect: 'postgresql',
     strict: true,
     verbose: true,
@@ -41,7 +46,7 @@ try {
   await writeFile(
     temporaryConfig,
     'export default ' + JSON.stringify(config, null, 2) + ';\n',
-    'utf8',
+    { encoding: 'utf8' },
   );
 
   if (!runDrizzle(['check', '--config', temporaryConfig])) {
@@ -71,10 +76,12 @@ try {
     console.error(
       'Review the change, create a real migration with pnpm --filter @360events/api db:generate, and commit it.',
     );
-    process.exitCode = 1;
+    process.exit(1);
   } else {
     console.log('[SCHEMA DRIFT] Schema matches the latest committed migration snapshot.');
   }
 } finally {
-  await rm(temporaryRoot, { recursive: true, force: true });
+  if (temporaryRoot) {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 }

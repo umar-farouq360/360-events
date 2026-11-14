@@ -1,17 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type postgres from 'postgres';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { Sql } from 'postgres';
 import {
   closeConcurrencyConnections,
   openConcurrencyConnections,
 } from './harness.js';
 
 describe('PostgreSQL concurrency harness', () => {
-  let connections: postgres.Sql[];
+  let connections: Sql[];
 
   beforeAll(async () => {
     connections = openConcurrencyConnections(2);
-    await connections[0]!.unsafe(`
+    const conn = connections[0];
+    if (!conn) {
+      throw new Error('Expected at least one connection');
+    }
+    await conn.unsafe(`
       CREATE TABLE concurrency_harness_rows (
         id text PRIMARY KEY,
         value integer NOT NULL
@@ -20,15 +24,35 @@ describe('PostgreSQL concurrency harness', () => {
   });
 
   afterAll(async () => {
-    await connections[0]!.unsafe('DROP TABLE IF EXISTS concurrency_harness_rows');
+    try {
+      const conn = connections[0];
+      if (conn) {
+        await conn.unsafe('DROP TABLE IF EXISTS concurrency_harness_rows');
+      }
+    } catch {
+      // Optionally ignore if the connection is already closed
+    }
     await closeConcurrencyConnections(connections);
   });
 
+  afterEach(async () => {
+    // Clean up all rows after each test to avoid interference
+    const conn = connections[0];
+    if (conn) {
+      await conn.unsafe('DELETE FROM concurrency_harness_rows');
+    }
+  });
+
   it('uses independent physical PostgreSQL connections', async () => {
-    const [first, second] = connections;
+    const first = connections[0];
+    const second = connections[1];
+    if (!first || !second) {
+      throw new Error('Expected at least two connections');
+    }
+
     const [firstPid, secondPid] = await Promise.all([
-      first`SELECT pg_backend_pid() AS pid`,
-      second`SELECT pg_backend_pid() AS pid`,
+      first<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`,
+      second<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`,
     ]);
 
     expect(firstPid[0]?.pid).toBeTypeOf('number');
@@ -37,15 +61,20 @@ describe('PostgreSQL concurrency harness', () => {
   });
 
   it('skips a row locked by another transaction instead of blocking', async () => {
-    const [locker, contender] = connections;
+    const locker = connections[0];
+    const contender = connections[1];
+    if (!locker || !contender) {
+      throw new Error('Expected at least two connections');
+    }
+
     const rowId = randomUUID();
     await locker`
       INSERT INTO concurrency_harness_rows (id, value)
       VALUES (${rowId}, 1)
     `;
 
-    let signalLockAcquired!: () => void;
-    let releaseLock!: () => void;
+    let signalLockAcquired: () => void = () => {};
+    let releaseLock: () => void = () => {};
     const lockAcquired = new Promise<void>((resolve) => {
       signalLockAcquired = resolve;
     });
@@ -53,8 +82,9 @@ describe('PostgreSQL concurrency harness', () => {
       releaseLock = resolve;
     });
 
-    const lockTransaction = locker.begin(async (transaction) => {
-      await transaction`
+    const lockTransaction = (async () => {
+      await locker`BEGIN`;
+      await locker`
         SELECT id
         FROM concurrency_harness_rows
         WHERE id = ${rowId}
@@ -62,11 +92,12 @@ describe('PostgreSQL concurrency harness', () => {
       `;
       signalLockAcquired();
       await lockRelease;
-    });
+      await locker`COMMIT`;
+    })();
 
     try {
       await lockAcquired;
-      const skipped = await contender`
+      const skipped = await contender<{ id: string }[]>`
         SELECT id
         FROM concurrency_harness_rows
         WHERE id = ${rowId}
@@ -77,7 +108,7 @@ describe('PostgreSQL concurrency harness', () => {
     } finally {
       releaseLock();
       await lockTransaction;
-      await locker`DELETE FROM concurrency_harness_rows WHERE id = ${rowId}`;
+      // Row cleanup is now handled in afterEach
     }
   });
 });
