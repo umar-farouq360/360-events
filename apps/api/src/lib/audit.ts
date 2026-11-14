@@ -141,7 +141,7 @@ export function validateMetadata(
       if (Object.keys(metadata).length > 0) {
         throw new Error('payout does not accept metadata fields');
       }
-      return metadata as AuditMetadataByAction[Action];
+      return metadata as AuditMetadataByAction[AuditAction];
 
     default: {
       return assertNever(action);
