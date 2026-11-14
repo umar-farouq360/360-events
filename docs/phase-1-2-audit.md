@@ -6,7 +6,7 @@
 | **Scope** | docs/implementation-plan.md, Phases 1 and 2 |
 | **Compared against** | phase-1-2-audit-findings.txt dated 13 November 2026 and current main source |
 | **Current verdict** | **NO-GO for Phase 3** |
-| **Verification level** | P1-T02 API tests passed twice (47/47 each run) and schema drift check passed, as reported locally; P2-T07 hardening implemented on branch, verification pending |
+| **Verification level** | P1-T02 local verification reported passing; P2-T07 merged to main after owner-reported 50/50 API tests, typecheck, and lint passed |
 
 ## 1. Executive summary
 
@@ -20,7 +20,7 @@ The repository has moved forward since the 13 November audit. Several previously
 - A recurring scheduler, outbox metrics, and a read-only job inspection function now exist.
 - The original lint-specific findings (generated email artifacts, duplicate ESLint glob, and worker test import extensions) appear to have been addressed in the current tree.
 - P1-T02's API test suite has now passed twice (47/47 tests each run), and the schema drift check has passed locally, as reported by the owner.
-- P2-T07 has been hardened on branch `p2-t07-rate-limit-hardening`: storage errors and missing counter rows now fail closed with a 503 API error envelope and request ID; expanded tests are added but have not yet been run.
+- P2-T07 is merged to main. The owner reports 50/50 API tests, typecheck, and lint passed after the timestamp-serialization fix. Runtime rate-limit policy attachment remains deferred until real protected routes exist.
 - The documentation previously reported missing now exists, although some documents remain draft or incomplete.
 
 These are **source-level findings**, not proof that the system works from a clean database or that the latest test suite passes. The last recorded test results remain the 13 November baseline; this update did not rerun them.
@@ -208,11 +208,11 @@ The previously missing documents now exist, but existence is not approval or com
 |---|---|---|
 | **P2-T01 Money and rounding primitives** | **PARTIAL** | Core integer arithmetic, rounding, and allocation exist. Explicit safe conversion helpers and stronger floating-point guardrails remain. |
 | **P2-T02 State-transition utility and history** | **MOSTLY DONE** | Conditional transitions and history exist. Required 20-run concurrency verification remains. |
-| **P2-T03 Audit log** | **PARTIAL** | Transactional writes and immutability protections exist. Per-action recursive allow-lists and actual DB role restrictions remain. |
+| **P2-T03 Audit log** | **IMPLEMENTATION IN PROGRESS** | Branch adds typed per-action metadata contracts and recursive runtime validation. Local verification and merge remain; actual DB role restrictions remain under P1-T07. |
 | **P2-T04 Durable jobs and transactional outbox** | **IMPLEMENTED; VERIFICATION OPEN** | Runner, recurring scheduler, metrics, and inspection code now exist. Repeated concurrency and PostgreSQL single-flight verification remain. |
 | **P2-T05 Idempotency framework** | **IMPLEMENTED; VERIFICATION OPEN** | Stale recovery, expiry cleanup, shared error envelope, and 20-request test exist. Runtime and repeated race verification remain. |
 | **P2-T06 Email adapter and notification pipeline** | **PARTIAL** | Migration and worker registration now exist. End-to-end delivery/failure tests and the final test-vs-production adapter decision remain. |
-| **P2-T07 Security middleware and rate limiting** | **IMPLEMENTED; VERIFICATION/ROUTE INTEGRATION OPEN** | Fail-closed storage handling and request-ID error envelopes are implemented on the current branch with expanded tests. No real business/auth route exists yet for production policy attachment. |
+| **P2-T07 Security middleware and rate limiting** | **MERGED; LOCAL VERIFICATION REPORTED PASS; ROUTE INTEGRATION OPEN** | Fail-closed storage handling and request-ID error envelopes are merged. Owner reports 50/50 API tests, typecheck, and lint passed. No real business/auth route exists yet for production policy attachment. |
 | **P2-T08 Authorisation framework** | **PARTIAL** | Registry and startup enforcement are wired. Authentication still uses stub headers; real session authentication and protected-route integration belong before protected Phase 3 routes ship. |
 
 ## 5. Important distinctions
@@ -239,4 +239,4 @@ The previously missing documents now exist, but existence is not approval or com
 
 ## 7. Immediate next task
 
-**P2-T07 is the active task.** Run the expanded rate-limit tests and quality checks on `p2-t07-rate-limit-hardening`. Attach policies to real authentication/business routes when those routes are introduced; do not invent a placeholder route or rate-limit health checks.
+**P2-T03 is the active task.** Complete strict typed metadata validation and local verification on `p2-t03-audit-metadata`. Keep actual database role/grant enforcement under P1-T07; do not treat the append-only trigger as a substitute for database privileges.
