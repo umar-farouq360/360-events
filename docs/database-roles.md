@@ -44,7 +44,7 @@ Run these steps against a dedicated staging database. Do not run them against pr
 6. Run `psql "$STAGING_MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/database/verify-application-privileges.sql`.
 7. Configure API and worker `DATABASE_URL` with the `app_service` connection string. Configure only the deployment migration step with the `migrator` connection string.
 
-The provisioning script creates login roles without passwords. This is intentional: credentials must be generated and stored outside source control. The script is safe to re-run for role attributes and grants, but it does not transfer ownership of an existing schema created by another role.
+The provisioning script creates login roles without passwords. This is intentional: credentials must be generated and stored outside source control. It is safe to re-run for role attributes and schema/default grants, but it does not transfer ownership of existing application tables, sequences, types, or functions. It also does not silently remove pre-existing role memberships; the verifier fails if either service role is a member of another role, because membership can permit `SET ROLE` even when `NOINHERIT` is set.
 
 ### Existing databases
 
