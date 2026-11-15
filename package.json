@@ -12,7 +12,7 @@
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
     "test": "vitest run",
-    "lint": "pnpm --filter @360events/api run build && eslint .",
+    "lint": "eslint . --cache --cache-strategy content",
     "typecheck": "pnpm -r run typecheck",
     "verify": "pnpm run lint && pnpm run typecheck && pnpm run build && pnpm --filter @360events/api run db:drift-check && pnpm run test"
   },
