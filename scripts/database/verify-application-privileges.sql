@@ -1,0 +1,187 @@
+-- Run with psql after provisioning roles, applying migrations, and applying
+-- grant-application-privileges.sql. Exits non-zero on any failed invariant.
+
+\set ON_ERROR_STOP on
+
+DO $$
+DECLARE
+  app_role record;
+  migration_role record;
+  non_migrator_owned_objects integer;
+BEGIN
+  SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+    INTO app_role
+    FROM pg_roles
+   WHERE rolname = 'app_service';
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Required role app_service does not exist';
+  END IF;
+
+  IF NOT app_role.rolcanlogin OR app_role.rolinherit OR app_role.rolsuper
+     OR app_role.rolcreatedb OR app_role.rolcreaterole
+     OR app_role.rolreplication OR app_role.rolbypassrls THEN
+    RAISE EXCEPTION 'app_service has a prohibited role attribute';
+  END IF;
+
+  SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+    INTO migration_role
+    FROM pg_roles
+   WHERE rolname = 'migrator';
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Required role migrator does not exist';
+  END IF;
+
+  IF NOT migration_role.rolcanlogin OR migration_role.rolinherit OR migration_role.rolsuper
+     OR migration_role.rolcreatedb OR migration_role.rolcreaterole
+     OR migration_role.rolreplication OR migration_role.rolbypassrls THEN
+    RAISE EXCEPTION 'migrator has a prohibited role attribute';
+  END IF;
+
+  IF has_schema_privilege('app_service', 'public', 'CREATE') THEN
+    RAISE EXCEPTION 'app_service must not have CREATE on public';
+  END IF;
+
+  IF has_database_privilege('app_service', current_database(), 'CREATE')
+     OR has_database_privilege('app_service', current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'app_service must not create database objects or temporary tables';
+  END IF;
+
+  IF has_database_privilege('migrator', current_database(), 'CREATE')
+     OR has_database_privilege('migrator', current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'migrator must not create databases/schemas or temporary tables';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members
+     WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'app_service')
+  ) THEN
+    RAISE EXCEPTION 'app_service must not inherit or SET ROLE into another role';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members
+     WHERE member = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+  ) THEN
+    RAISE EXCEPTION 'migrator must not inherit or SET ROLE into another role';
+  END IF;
+
+  IF NOT has_schema_privilege('migrator', 'public', 'CREATE') THEN
+    RAISE EXCEPTION 'migrator is missing CREATE on public';
+  END IF;
+
+  IF has_table_privilege('app_service', 'public.audit_events', 'UPDATE')
+     OR has_table_privilege('app_service', 'public.audit_events', 'DELETE')
+     OR has_table_privilege('app_service', 'public.audit_events', 'TRUNCATE')
+     OR has_table_privilege('app_service', 'public.audit_events', 'REFERENCES')
+     OR has_table_privilege('app_service', 'public.audit_events', 'TRIGGER') THEN
+    RAISE EXCEPTION 'app_service has a prohibited audit_events privilege';
+  END IF;
+
+  IF NOT has_table_privilege('app_service', 'public.audit_events', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.audit_events', 'INSERT') THEN
+    RAISE EXCEPTION 'app_service is missing required audit_events SELECT/INSERT';
+  END IF;
+
+  IF has_table_privilege('app_service', 'public.db_migrations_history', 'SELECT')
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'INSERT')
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'UPDATE')
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'DELETE')
+     OR has_table_privilege('app_service', 'public.db_migrations_history', 'TRUNCATE') THEN
+    RAISE EXCEPTION 'app_service must not access db_migrations_history';
+  END IF;
+
+  IF has_schema_privilege('app_service', 'drizzle', 'USAGE') THEN
+    RAISE EXCEPTION 'app_service must not use the Drizzle migration schema';
+  END IF;
+
+  IF to_regclass('drizzle.__drizzle_migrations') IS NOT NULL
+     AND (
+       has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'SELECT')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'INSERT')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'UPDATE')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'DELETE')
+       OR has_table_privilege('app_service', 'drizzle.__drizzle_migrations', 'TRUNCATE')
+     ) THEN
+    RAISE EXCEPTION 'app_service must not access the Drizzle migration journal';
+  END IF;
+
+  IF NOT has_table_privilege('app_service', 'public.outbox_events', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.outbox_events', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.idempotency_keys', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.notifications', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.notification_attempts', 'DELETE')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'SELECT')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'INSERT')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'UPDATE')
+     OR NOT has_table_privilege('app_service', 'public.rate_limits', 'DELETE') THEN
+    RAISE EXCEPTION 'app_service is missing required DML privileges on runtime tables';
+  END IF;
+
+  SELECT count(*)::integer
+    INTO non_migrator_owned_objects
+    FROM (
+      SELECT c.relowner AS owner_oid
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+         AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+      UNION ALL
+      SELECT t.typowner AS owner_oid
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+       WHERE n.nspname = 'public'
+         AND t.typisdefined
+      UNION ALL
+      SELECT p.proowner AS owner_oid
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+    ) AS application_objects
+   WHERE owner_oid <> (SELECT oid FROM pg_roles WHERE rolname = 'migrator');
+
+  IF non_migrator_owned_objects <> 0 THEN
+    RAISE EXCEPTION
+      'Expected public application objects to be owned by migrator; found % object(s) with another owner',
+      non_migrator_owned_objects;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_namespace
+     WHERE nspname = 'drizzle'
+       AND nspowner = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+  ) THEN
+    RAISE EXCEPTION 'The drizzle schema must be owned by migrator';
+  END IF;
+
+  IF to_regclass('drizzle.__drizzle_migrations') IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_class
+        WHERE oid = to_regclass('drizzle.__drizzle_migrations')
+          AND relowner = (SELECT oid FROM pg_roles WHERE rolname = 'migrator')
+     ) THEN
+    RAISE EXCEPTION 'The Drizzle migration journal must exist and be owned by migrator';
+  END IF;
+END
+$$;
+
+SELECT
+  'app_service' AS role_name,
+  has_schema_privilege('app_service', 'public', 'USAGE') AS public_schema_usage,
+  has_schema_privilege('app_service', 'public', 'CREATE') AS public_schema_create,
+  has_table_privilege('app_service', 'public.audit_events', 'SELECT') AS audit_select,
+  has_table_privilege('app_service', 'public.audit_events', 'INSERT') AS audit_insert,
+  has_table_privilege('app_service', 'public.audit_events', 'UPDATE') AS audit_update,
+  has_table_privilege('app_service', 'public.audit_events', 'DELETE') AS audit_delete;

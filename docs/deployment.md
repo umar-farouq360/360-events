@@ -1,27 +1,62 @@
-# Deployment Guide (v0.1.0)
+# Deployment Guide (P1-T07)
 
-This document outlines the standard operating procedure for releasing 360Events to staging and production, fulfilling the requirements of task P1-T07.
+**Status: deployment pipeline not yet operational.** The current `.github/workflows/deploy-staging.yml` still contains mocked image-push, deployment-trigger, and readiness steps. A real staging release cannot be claimed until a hosting provider, registry, deployment mechanism, and staging secrets are configured.
 
-## 1. Release Order
-Every automated deployment must strictly follow this sequence:
-1. **Build**: Generate Docker images and static web assets.
-2. **Migrate**: Run `drizzle-kit migrate` against the database using the restricted `migrator` PostgreSQL role (which has DDL privileges).
-3. **Deploy**: Update the running API and Worker containers.
-4. **Verify**: Poll the `/health/ready` endpoint. If the service does not report readiness within the timeout period, the deployment pipeline aborts.
+## Required release order
 
-## 2. Database Role Separation
-- The application runtime (API and Worker) connects using the `app_service` role. This role only has DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) permissions and cannot drop or alter tables.
-- Migrations in CI are run using the `migrator` role.
+1. Build the API, worker, and web artifacts/images.
+2. Run Drizzle migrations as the dedicated `migrator` role.
+3. Apply the application grants after migrations.
+4. Deploy the API and worker with the `app_service` database role; deploy the web application.
+5. Poll the real API readiness endpoint and abort if it does not become healthy within the agreed timeout.
+6. Record the deployed image digests, migration result, readiness result, and rollback target.
 
-## 3. The Expand/Contract Pattern
-Because database migrations run *before* the new application code deploys, the system exists in a transitional state during every release. To ensure zero-downtime deployments:
-- **Rule**: New application code must tolerate the old database schema, and old application code must tolerate the new database schema[cite: 4].
-- **Expansion (Phase 1)**: Add a new column or table. (Old code ignores it, new code begins using it).
-- **Contraction (Phase 2)**: Remove the old column or table in a subsequent deployment *only after* all old application instances have been terminated.
+Do not run migrations using the API or worker runtime credentials.
 
-## 4. Rollback Procedure
-If a deployment fails the readiness check or introduces a critical defect:
-1. **Application Rollback**: Revert the container image tag to the previously known good release in the hosting provider's dashboard or CLI.
-2. **Database Integrity**: Because of the Expand/Contract rule, the old application code is strictly compatible with the new database schema. Do **not** attempt to write down-migrations (rollbacks) for the database during a live incident.
-3. **Investigation**: Diagnose the failure locally or via logs.
-4. **Fix Forward**: Commit the fix to `main` and allow the pipeline to roll forward securely.
+## Database role setup
+
+Follow [database-roles.md](./database-roles.md). The staging database must be provisioned before its first migration. Keep these values separate in the hosting secret store:
+
+- Database administrator URL: one-time role provisioning only.
+- Migrator URL: migration step only.
+- Application URL: API and worker runtime only.
+
+No database URL or password belongs in the repository, Docker build arguments, image layers, or committed workflow files.
+
+## Container entry points
+
+The API TypeScript project has `rootDir: ./src` and `outDir: ./dist`; `src/index.ts` therefore emits `dist/index.js`. The API container must start that file. The worker container starts `apps/worker/dist/index.js`.
+
+Both Dockerfiles use multi-stage builds, pinned Node 22 and pnpm 9.12.1, and a non-root runtime user.
+
+## Expand/contract rule
+
+Migrations run before the new application version is deployed. Therefore:
+
+- New application code must tolerate the old schema during rollout.
+- Old application code must tolerate the expanded schema until all old instances have stopped.
+- Destructive contraction changes belong in a later release, after old application instances are gone.
+
+## Rollback
+
+If readiness fails or the release introduces a critical defect:
+
+1. Stop promotion and retain the failing release's logs and image digest.
+2. Roll back API, worker, and web to the previous known-good image versions.
+3. Do not run ad-hoc down-migrations during an incident. The migration must be backward-compatible under the expand/contract rule.
+4. Verify readiness and the core health checks on the previous release.
+5. Fix forward in a new release after the cause is understood.
+
+## Remaining staging prerequisites
+
+The following are intentionally unresolved until the hosting target is selected:
+
+- Hosting provider and service definitions for API, worker, and web.
+- Container registry and immutable image-tag/digest strategy.
+- Deployment trigger (provider CLI, API, or webhook) and readiness URL.
+- Managed PostgreSQL backup configuration and restore evidence.
+- Provider test-mode keys and secret-store bindings.
+- A deliberately broken deployment and successful rollback rehearsal.
+- Image and secret scanning in CI.
+
+The workflow must remain marked incomplete until these steps are implemented and rehearsed. Do not replace them with successful-looking `echo` statements.

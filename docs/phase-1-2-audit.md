@@ -143,18 +143,18 @@ A deliberate negative drift experiment and the dedicated test-database safety-gu
 
 ### 6. P1-T07 — Finish deployment and database privilege separation
 
-**Still outstanding**
-- .github/workflows/deploy-staging.yml still uses echo statements and commented-out build, push, deployment, and readiness commands.
-- apps/api/Dockerfile still starts apps/api/dist/server.js. The API TypeScript configuration compiles source under src/; the actual emitted entry point must be confirmed and the container command aligned with it.
-- docs/database-roles.md describes roles, but actual role creation and grants have not been implemented or verified.
-- No real staging deployment or rollback rehearsal is evidenced.
+**Database privilege implementation drafted; verification and real staging remain open**
+- `scripts/database/provision-roles.sql` provisions separate non-superuser `app_service` and `migrator` login roles, schema permissions, and default privileges.
+- `scripts/database/grant-application-privileges.sql` grants runtime DML while restricting `audit_events` to SELECT/INSERT and denying access to migration bookkeeping.
+- `scripts/database/verify-application-privileges.sql` checks the intended role attributes, ownership, and grants. These scripts have not yet been executed against PostgreSQL.
+- The API Docker command now targets `apps/api/dist/index.js`, matching `src/index.ts` and the API TypeScript `rootDir`/`outDir` configuration.
+- The staging workflow still has mocked build, push, deploy, and readiness steps. No real staging deployment or rollback rehearsal is evidenced.
 
 **Required next action**
-1. Confirm the emitted API entry point from a clean build and correct the Docker command.
-2. Build and start the API and worker images.
-3. Implement the actual staging build/push/deploy/readiness steps, or explicitly keep staging marked incomplete and blocked.
-4. Create least-privilege application and migration roles, apply grants, and test the denied operations.
-5. Perform and record a staging deployment and rollback rehearsal.
+1. Run the role provisioning and migration/grant sequence on a dedicated disposable PostgreSQL database; verify the migrator can apply migrations and the app role is denied DDL and audit mutation.
+2. Build and start the API and worker images; verify their entry points and non-root runtime.
+3. Select/configure the staging host, registry, deployment trigger, URLs, and secret-store bindings before replacing workflow placeholders.
+4. Implement actual staging deployment/readiness and record a deliberately broken release rollback rehearsal.
 
 ### 7. P1-T03 and P1-T05 — Complete skeleton-level tests and developer workflow
 
@@ -200,7 +200,7 @@ The previously missing documents now exist, but existence is not approval or com
 | **P1-T04 Quality gate and CI** | **PARTIAL** | Workflow exists; database port, migration-generation order, and full-workspace build gate remain incorrect/incomplete. Branch protection is unverified. |
 | **P1-T05 Worker and web skeletons** | **PARTIAL** | Worker runner and handler registration have advanced. API dev script, truthful worker processing status, and web tests remain. |
 | **P1-T06 Shared packages and contract round trip** | **PARTIAL** | Shared types and validators exist, and the API consumes the shared error type. Pagination schema consumption and type-level contract tests remain. |
-| **P1-T07 Staging and deployment pipeline** | **NOT MET** | Staging remains mocked; Docker entry point and database role grants remain unverified/unimplemented. |
+| **P1-T07 Staging and deployment pipeline** | **PARTIAL; VERIFICATION OPEN** | Role provisioning/grant/verification SQL and a corrected API entry point are drafted. PostgreSQL execution, image verification, provider-specific deployment, and rollback rehearsal remain open. |
 
 ### Phase 2
 
