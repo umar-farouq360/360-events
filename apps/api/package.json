@@ -40,7 +40,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx scripts/migrate.ts",
     "db:drift-check": "tsx scripts/check-schema-drift.ts",
     "test": "vitest run"
   },
