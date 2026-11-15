@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Audit date** | 14 November 2026 |
+| **Audit date** | 15 November 2026 |
 | **Scope** | docs/implementation-plan.md, Phases 1 and 2 |
-| **Compared against** | phase-1-2-audit-findings.txt dated 13 November 2026 and current main source |
+| **Compared against** | `main` at `9ee9587` and P1-T04 branch `p1-t04-ci-quality-gate` |
 | **Current verdict** | **NO-GO for Phase 3** |
-| **Verification level** | P1-T02 local verification reported passing; P2-T07 merged to main after owner-reported 50/50 API tests, typecheck, and lint passed |
+| **Verification level** | P1-T02 and P2-T07 owner-reported local checks passed; P2-T03 and P1-T07 are merged; P1-T04 implementation is in PR #17 and awaits CI/negative-probe verification |
 
 ## 1. Executive summary
 
@@ -20,7 +20,9 @@ The repository has moved forward since the 13 November audit. Several previously
 - A recurring scheduler, outbox metrics, and a read-only job inspection function now exist.
 - The original lint-specific findings (generated email artifacts, duplicate ESLint glob, and worker test import extensions) appear to have been addressed in the current tree.
 - P1-T02's API test suite has now passed twice (47/47 tests each run), and the schema drift check has passed locally, as reported by the owner.
-- P2-T07 is merged to main. The owner reports 50/50 API tests, typecheck, and lint passed after the timestamp-serialization fix. Runtime rate-limit policy attachment remains deferred until real protected routes exist.
+- P2-T07 and P2-T03 are merged to main. The owner reported the relevant API tests, typecheck, lint, and build checks passing before merge. Runtime rate-limit policy attachment remains deferred until real protected routes exist.
+- P1-T07's role provisioning and migration-runner fix are merged in PRs #15 and #16. The owner reports that Codex resolved the migration/privilege blocker. Real provider-specific staging deployment and rollback rehearsal remain outstanding.
+- P1-T04 is being implemented in PR #17. The branch adds full-workspace build and schema-drift checks, least-privilege migration verification, Dependabot, and a PR Definition of Done.
 - The documentation previously reported missing now exists, although some documents remain draft or incomplete.
 
 These are **source-level findings**, not proof that the system works from a clean database or that the latest test suite passes. The last recorded test results remain the 13 November baseline; this update did not rerun them.
@@ -97,17 +99,10 @@ A deliberate negative drift experiment and the dedicated test-database safety-gu
 
 ### 3. P2-T03 — Enforce audit metadata allow-lists
 
-**Still outstanding**
-- validateMetadata() checks only a shallow, top-level blocklist of five key names.
-- It does not enforce a per-action allow-list.
-- Nested forbidden keys can pass through.
-- Application-role restrictions on audit-table mutation are not implemented; documentation describes the intended policy, but there are no database grants proving it.
-
-**Required next action**
-1. Define permitted metadata keys per audit action.
-2. Reject unknown keys and sensitive keys recursively at every nesting depth.
-3. Add positive and negative tests for each supported action.
-4. Enforce append-only access through actual database roles/grants (coordinate with item 6).
+**Merged to main in PR #13; owner reported API tests, typecheck, lint, and build passing before merge.**
+- Typed per-action metadata contracts and recursive runtime validation are implemented.
+- Database-level append-only restrictions are covered by the P1-T07 application grants and verification workflow.
+- No real business audit callsites exist yet; keep the action vocabulary limited to implemented actions until business routes are added.
 
 ### 4. P2-T08 — Close the authorisation integration gap before protected routes ship
 
@@ -128,33 +123,34 @@ A deliberate negative drift experiment and the dedicated test-database safety-gu
 
 ### 5. P1-T04 — Correct the CI quality gate
 
-**Still outstanding**
-- PostgreSQL is mapped to host port 5435, but CI's DATABASE_URL points to localhost:5432.
-- CI runs db:generate before migration checks. This can generate a missing migration during CI rather than requiring the migration to be committed.
-- Root pnpm verify runs lint, typecheck, and tests. Lint builds the API, but the full workspace pnpm build is not an explicit verification step.
-- Branch protection / required status checks cannot be confirmed from the workflow file alone.
+**Implementation in PR #17 (`p1-t04-ci-quality-gate`); CI and owner-side negative probes remain pending.**
+- The PostgreSQL service mapping is already correct: host port `5435` maps to container port `5432`, and `DATABASE_URL` uses `localhost:5435`. The earlier audit statement claiming a port mismatch was incorrect and is withdrawn.
+- The existing workflow ran `db:generate`; PR #17 replaces this with `db:drift-check`, so CI validates committed schema history without generating repository migrations.
+- PR #17 adds explicit full-workspace build verification and expands `pnpm verify` to include build and schema drift checks.
+- PR #17 adds a separate disposable PostgreSQL database to exercise the migration and grants using `migrator` and `app_service`, including negative DDL, migration-journal, and audit-mutation checks.
+- PR #17 adds weekly Dependabot updates for pnpm dependencies and GitHub Actions, plus a pull-request Definition of Done template.
+- CI retains `pnpm install --frozen-lockfile`; this is the lockfile consistency gate. A deliberate lockfile-negative probe has not yet been run.
+- Secret scanning now scans unverified findings as well as verified findings and uses the PR base SHA or previous push SHA. The planted dummy-secret negative probe remains outstanding.
+- GitHub branch protection and required status checks cannot be confirmed from the workflow file; owner verification is still required.
 
 **Required next action**
-1. Correct the database port or service mapping.
-2. Remove migration generation from CI; CI should validate committed migrations, not create them.
-3. Add the full workspace build to the verification gate.
-4. Run CI against a clean database after item 1 is complete.
-5. Confirm the main-branch protection rules separately in GitHub settings.
+1. Get the PR #17 CI run green and fix any failures.
+2. Run a throwaway-branch dummy-secret probe and confirm the secret scan fails.
+3. Run a throwaway lockfile-mismatch probe and confirm frozen installation fails.
+4. Configure/verify `Verify, Test, and Audit` as a required status check on `main` and disallow bypass as appropriate.
 
 ### 6. P1-T07 — Finish deployment and database privilege separation
 
-**Database privilege implementation drafted; verification and real staging remain open**
-- `scripts/database/provision-roles.sql` provisions separate non-superuser `app_service` and `migrator` login roles, schema permissions, and default privileges.
-- `scripts/database/grant-application-privileges.sql` grants runtime DML while restricting `audit_events` to SELECT/INSERT and denying access to migration bookkeeping.
-- `scripts/database/verify-application-privileges.sql` checks the intended role attributes, ownership, and grants. These scripts have not yet been executed against PostgreSQL.
-- The API Docker command now targets `apps/api/dist/index.js`, matching `src/index.ts` and the API TypeScript `rootDir`/`outDir` configuration.
-- The staging workflow still has mocked build, push, deploy, and readiness steps. No real staging deployment or rollback rehearsal is evidenced.
+**Database-role implementation merged in PRs #15 and #16; owner reports that Codex resolved the migration/privilege blocker.**
+- The repository provisions separate non-superuser `app_service` and `migrator` roles, applies runtime grants, and verifies role attributes, object ownership, audit restrictions, and migration-journal isolation.
+- `apps/api/scripts/migrate.ts` now runs migrations through the dedicated migrator role without requiring database-level CREATE/TEMPORARY privileges.
+- API and worker Docker images were built and started locally; health endpoints returned HTTP 200 and both containers ran as the non-root `node` user, as reported during this work.
+- The staging workflow still contains mocked image build/push, deployment trigger, and readiness steps. No real staging deployment or rollback rehearsal is evidenced.
 
 **Required next action**
-1. Run the role provisioning and migration/grant sequence on a dedicated disposable PostgreSQL database; verify the migrator can apply migrations and the app role is denied DDL and audit mutation.
-2. Build and start the API and worker images; verify their entry points and non-root runtime.
-3. Select/configure the staging host, registry, deployment trigger, URLs, and secret-store bindings before replacing workflow placeholders.
-4. Implement actual staging deployment/readiness and record a deliberately broken release rollback rehearsal.
+1. Use the P1-T04 CI job to continuously verify role provisioning, clean migrations, runtime grants, and negative privilege cases.
+2. Select/configure the staging host, registry, deployment trigger, URLs, and secret-store bindings.
+3. Implement actual staging deployment/readiness and record a deliberately broken release rollback rehearsal.
 
 ### 7. P1-T03 and P1-T05 — Complete skeleton-level tests and developer workflow
 
@@ -197,10 +193,10 @@ The previously missing documents now exist, but existence is not approval or com
 | **P1-T01 Workspace / TypeScript / lint baseline** | **PARTIAL** | Workspace, strict TypeScript, pnpm guard, and boundary linting exist. Previous specific lint findings appear fixed, but lint has not been rerun. No CI guard against stray lockfiles is evidenced. |
 | **P1-T02 Database / Drizzle / migrations / test harness** | **IMPLEMENTED; LOCAL VERIFICATION REPORTED PASS** | Two consecutive API test runs passed (47/47 each); the schema drift check passed. The owner also reports resolving and pushing TypeScript/lint issues. |
 | **P1-T03 API skeleton** | **PARTIAL** | Security wiring, registered health routes, startup registry verification, error mapping, and graceful shutdown exist. Required health/error/log-redaction/shutdown tests remain incomplete. |
-| **P1-T04 Quality gate and CI** | **PARTIAL** | Workflow exists; database port, migration-generation order, and full-workspace build gate remain incorrect/incomplete. Branch protection is unverified. |
+| **P1-T04 Quality gate and CI** | **IMPLEMENTATION IN PR #17** | Corrected migration/drift gate, full-workspace build, least-privilege DB checks, Dependabot, and PR template are proposed. CI, negative probes, and branch protection remain to verify. |
 | **P1-T05 Worker and web skeletons** | **PARTIAL** | Worker runner and handler registration have advanced. API dev script, truthful worker processing status, and web tests remain. |
 | **P1-T06 Shared packages and contract round trip** | **PARTIAL** | Shared types and validators exist, and the API consumes the shared error type. Pagination schema consumption and type-level contract tests remain. |
-| **P1-T07 Staging and deployment pipeline** | **PARTIAL; VERIFICATION OPEN** | Role provisioning/grant/verification SQL and a corrected API entry point are drafted. PostgreSQL execution, image verification, provider-specific deployment, and rollback rehearsal remain open. |
+| **P1-T07 Staging and deployment pipeline** | **DATABASE PRIVILEGES MERGED; STAGING OPEN** | Role provisioning, grants, migration-runner fix, and Docker entry-point correction are merged. Provider-specific deployment and rollback rehearsal remain open. |
 
 ### Phase 2
 
@@ -208,7 +204,7 @@ The previously missing documents now exist, but existence is not approval or com
 |---|---|---|
 | **P2-T01 Money and rounding primitives** | **PARTIAL** | Core integer arithmetic, rounding, and allocation exist. Explicit safe conversion helpers and stronger floating-point guardrails remain. |
 | **P2-T02 State-transition utility and history** | **MOSTLY DONE** | Conditional transitions and history exist. Required 20-run concurrency verification remains. |
-| **P2-T03 Audit log** | **IMPLEMENTATION IN PROGRESS** | Branch adds typed per-action metadata contracts and recursive runtime validation. Local verification and merge remain; actual DB role restrictions remain under P1-T07. |
+| **P2-T03 Audit log** | **MERGED; OWNER-REPORTED CHECKS PASS** | Typed per-action metadata contracts and recursive runtime validation are merged; append-only database privileges are implemented under P1-T07. |
 | **P2-T04 Durable jobs and transactional outbox** | **IMPLEMENTED; VERIFICATION OPEN** | Runner, recurring scheduler, metrics, and inspection code now exist. Repeated concurrency and PostgreSQL single-flight verification remain. |
 | **P2-T05 Idempotency framework** | **IMPLEMENTED; VERIFICATION OPEN** | Stale recovery, expiry cleanup, shared error envelope, and 20-request test exist. Runtime and repeated race verification remain. |
 | **P2-T06 Email adapter and notification pipeline** | **PARTIAL** | Migration and worker registration now exist. End-to-end delivery/failure tests and the final test-vs-production adapter decision remain. |
@@ -239,4 +235,4 @@ The previously missing documents now exist, but existence is not approval or com
 
 ## 7. Immediate next task
 
-**P2-T03 is implemented and locally verified; PR #13 is ready for review.** After review and merge, continue with P1-T07 database role/grant enforcement. Do not treat the append-only trigger as a substitute for database privileges.
+**P1-T04 is the active task; PR #17 is open as a draft.** Get its CI and negative probes verified, then confirm branch protection. Keep Phase 3 on NO-GO until the remaining Phase 1/2 acceptance criteria and staging prerequisites are satisfied.
