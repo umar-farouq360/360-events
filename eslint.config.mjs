@@ -7,31 +7,15 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: [
-            'eslint.config.mjs',
-            'vitest.workspace.ts',
-            'apps/api/tests/*.ts',
-            'apps/api/tests/helpers/*.ts',
-            'apps/api/drizzle.config.ts',
-            'apps/api/vitest.config.ts',
-            'apps/api/scripts/check-schema-drift.ts',
-            'apps/worker/tests/*.ts',
-            'apps/worker/vitest.config.ts',
-            'apps/web/postcss.config.js',
-            'apps/web/tailwind.config.js',
-          ],
-          defaultProject: 'tsconfig.eslint.json',
-          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 32,
-        },
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error'
-    }
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
   },
   {
     files: ['packages/**/*.ts'],
@@ -40,15 +24,15 @@ export default tseslint.config(
         patterns: [
           {
             group: ['apps/*', '@360events/api', '@360events/web', '@360events/worker'],
-            message: 'Shared packages must not import from applications.'
+            message: 'Shared packages must not import from applications.',
           },
           {
             group: ['drizzle-orm', 'postgres'],
-            message: 'Database types and ORM internals must not leak into shared public packages.'
-          }
-        ]
-      }]
-    }
+            message: 'Database types and ORM internals must not leak into shared public packages.',
+          },
+        ],
+      }],
+    },
   },
   // P2-T01: Financial module restrictions
   {
@@ -58,16 +42,16 @@ export default tseslint.config(
         'error',
         {
           selector: "CallExpression[callee.object.name='Math'][callee.property.name=/^(round|floor|ceil)$/]",
-          message: 'Math.round, floor, and ceil are forbidden in financial modules. Use explicit bigint arithmetic.'
+          message: 'Math.round, floor, and ceil are forbidden in financial modules. Use explicit bigint arithmetic.',
         },
         {
           selector: "CallExpression[callee.name='parseFloat']",
-          message: 'Floating-point parsing is strictly prohibited for financial operations.'
-        }
-      ]
-    }
+          message: 'Floating-point parsing is strictly prohibited for financial operations.',
+        },
+      ],
+    },
   },
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**']
-  }
+    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**'],
+  },
 );
