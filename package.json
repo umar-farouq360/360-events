@@ -14,7 +14,7 @@
     "test": "vitest run",
     "lint": "pnpm --filter @360events/api run build && eslint .",
     "typecheck": "pnpm -r run typecheck",
-    "verify": "pnpm run lint && pnpm run typecheck && pnpm run test"
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run build && pnpm --filter @360events/api run db:drift-check && pnpm run test"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
