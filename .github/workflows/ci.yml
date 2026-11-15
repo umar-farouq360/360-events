@@ -2,15 +2,18 @@ name: CI Quality Gate
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
   verify:
     name: Verify, Test, and Audit
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -21,7 +24,7 @@ jobs:
         ports:
           - 5435:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d 360events_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -34,20 +37,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Required for secret scanning
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Secret Scanning
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
           head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --debug
 
       - name: Setup Node 22 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -56,8 +60,7 @@ jobs:
 
       - name: Get pnpm store directory
         shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
       - name: Setup pnpm cache
         uses: actions/cache@v4
@@ -73,16 +76,86 @@ jobs:
       - name: Dependency Audit
         run: pnpm audit --prod --audit-level high
 
-      - name: Typecheck & Lint
-        run: |
-          pnpm run typecheck
-          pnpm run lint
+      - name: Typecheck
+        run: pnpm run typecheck
 
-      - name: Database Migrations & Drift Check
-        run: |
-          pnpm --filter @360events/api run db:generate
-          pnpm --filter @360events/api run db:drift-check
-          pnpm --filter @360events/api run db:migrate
+      - name: Lint
+        run: pnpm run lint
 
-      - name: Unit & Integration Tests
+      - name: Build All Workspaces
+        run: pnpm run build
+
+      - name: Verify Committed Database Migrations
+        run: pnpm --filter @360events/api run db:drift-check
+
+      - name: Verify Least-Privilege Migration Workflow
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ADMIN_URL="postgres://postgres:postgres@localhost:5435/360events_privileges_test"
+          MIGRATOR_URL="postgres://migrator:ci-migrator-password@localhost:5435/360events_privileges_test"
+          APP_URL="postgres://app_service:ci-app-service-password@localhost:5435/360events_privileges_test"
+
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE 360events_privileges_test"
+
+          psql "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+            -f scripts/database/provision-roles.sql
+
+          psql "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE migrator PASSWORD 'ci-migrator-password'; ALTER ROLE app_service PASSWORD 'ci-app-service-password';"
+
+          env -u TEST_DATABASE_URL DATABASE_URL="$MIGRATOR_URL" \
+            pnpm --filter @360events/api run db:migrate
+
+          psql "$MIGRATOR_URL" -v ON_ERROR_STOP=1 \
+            -f scripts/database/grant-application-privileges.sql
+
+          psql "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+            -f scripts/database/verify-application-privileges.sql
+
+          # Prove the runtime role can perform its intended DML.
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO public.rate_limits (key, points, expires_at) VALUES ('ci-privilege-probe', 1, now() + interval '1 minute') ON CONFLICT (key) DO UPDATE SET points = EXCLUDED.points"
+
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "UPDATE public.rate_limits SET points = 2 WHERE key = 'ci-privilege-probe'"
+
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "DELETE FROM public.rate_limits WHERE key = 'ci-privilege-probe'"
+
+          # Prove the runtime role cannot create schema objects.
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "CREATE TABLE public.ci_forbidden_ddl (id integer)"; then
+            echo "ERROR: app_service unexpectedly created a table."
+            exit 1
+          fi
+
+          # Prove the runtime role cannot access migration bookkeeping.
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "SELECT * FROM drizzle.__drizzle_migrations"; then
+            echo "ERROR: app_service unexpectedly accessed the migration journal."
+            exit 1
+          fi
+
+          # Audit rows are insertable but immutable to the runtime role.
+          psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO public.audit_events (id, actor_type, actor_id, action, entity, outcome) VALUES ('ci-audit-probe', 'system', 'ci', 'ci_probe', 'ci', 'success')"
+
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "UPDATE public.audit_events SET action = 'tampered' WHERE id = 'ci-audit-probe'"; then
+            echo "ERROR: app_service unexpectedly updated an audit event."
+            exit 1
+          fi
+
+          if psql "$APP_URL" -v ON_ERROR_STOP=1 -c \
+            "DELETE FROM public.audit_events WHERE id = 'ci-audit-probe'"; then
+            echo "ERROR: app_service unexpectedly deleted an audit event."
+            exit 1
+          fi
+
+      - name: Unit and Integration Tests
         run: pnpm run test
