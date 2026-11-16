@@ -11,7 +11,8 @@
       "@360events/api/logger": ["./apps/api/src/lib/logger.ts"],
       "@360events/api/jobs": ["./apps/api/src/lib/jobs.ts"],
       "@360events/api/schema": ["./apps/api/src/db/schema/index.ts"],
-      "@360events/api/database-url": ["./apps/api/src/config/database-url.ts"]
+      "@360events/api/database-url": ["./apps/api/src/config/database-url.ts"],
+      "@360events/types": ["./packages/types/src/index.ts"]
     }
   },
   "include": [
