@@ -39,7 +39,7 @@ describe('RecurringScheduler single-flight', () => {
     expect(results.reduce((a, b) => a + b, 0)).toBe(1);
     const rows = await db.select().from(outboxEvents).where(eq(outboxEvents.type, 'cleanup-idempotency-keys'));
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.dedupeKey).toBe('recurring:cleanup:29694440'); // floor(now/60000)
+    expect(rows[0]?.dedupeKey).toBe(`recurring:cleanup:${Math.floor(now.getTime() / 60_000)}`);
   });
 
   it('enqueues again only when the bucket advances', async () => {

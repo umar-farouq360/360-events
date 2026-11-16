@@ -3,12 +3,13 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { databaseUrl } from '@360events/api/database-url';
+import * as schema from '@360events/api/schema';
 import { outboxEvents } from '@360events/api/schema';
 import { getOutboxMetrics, inspectJobs } from '../src/lib/metrics.js';
 
 const testSchema = `worker_metrics_test_${randomUUID().replaceAll('-', '')}`;
 const sql = postgres(databaseUrl, { max: 1 });
-const db = drizzle(sql, { schema: { outboxEvents } });
+const db = drizzle(sql, { schema });
 
 beforeAll(async () => {
   await sql.unsafe(`CREATE SCHEMA ${testSchema}`);
@@ -36,7 +37,7 @@ describe('outbox metrics', () => {
       { id: randomUUID(), type: 'a', payload: {}, status: 'completed', completedAt: now },
       { id: randomUUID(), type: 'a', payload: {}, status: 'failed', attempts: 3, maxAttempts: 3 },
     ]);
-    const m = await getOutboxMetrics(now);
+    const m = await getOutboxMetrics(now, db);
     expect(m).toMatchObject({ pending: 2, processing: 1, completed: 1, failed: 1, deadLettered: 1 });
     expect(m.oldestPendingAgeSeconds).toBe(90);
   });
@@ -46,9 +47,9 @@ describe('outbox metrics', () => {
       { id: randomUUID(), type: 'a', payload: {}, status: 'failed', attempts: 1, maxAttempts: 1 },
       { id: randomUUID(), type: 'b', payload: {}, status: 'pending' },
     ]);
-    const failed = await inspectJobs({ status: 'failed' });
+    const failed = await inspectJobs({ status: 'failed' }, db);
     expect(failed.map((r) => r.type)).toEqual(['a']);
-    const clamped = await inspectJobs({ limit: 10_000 });
+    const clamped = await inspectJobs({ limit: 10_000 }, db);
     expect(clamped.length).toBeLessThanOrEqual(500);
   });
 });
