@@ -10,7 +10,7 @@
     "packages/**/*.ts",
     "packages/**/*.tsx",
     "eslint.config.mjs",
-    "vitest.workspace.ts"
+    "vitest.config.mjs"
   ],
   "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**"]
 }
