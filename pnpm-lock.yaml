@@ -113,23 +113,23 @@ importers:
         version: link:../../packages/types
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.105.0(@types/react@18.3.31)(react@18.3.1)
+        version: 5.105.0(@types/react@19.3.0)(react@19.3.1)
       react:
-        specifier: ^18.3.0
-        version: 18.3.1
+        specifier: ^19.3.1
+        version: 19.3.1
       react-dom:
         specifier: ^18.3.0
-        version: 18.3.1(react@18.3.1)
+        version: 18.3.1(react@19.3.1)
       react-router-dom:
         specifier: ^6.23.0
-        version: 6.30.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 6.30.6(react-dom@18.3.1(react@19.3.1))(react@19.3.1)
     devDependencies:
       '@types/react':
-        specifier: ^18.3.0
-        version: 18.3.31
+        specifier: ^19.3.0
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^18.3.0
-        version: 18.3.7(@types/react@18.3.31)
+        version: 18.3.7(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^4.3.0
         version: 4.7.0(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@1.21.7)(tsx@4.23.15))
@@ -1324,9 +1324,6 @@ packages:
     resolution: {integrity: sha512-rjPOSk2yI0714Pi8LdjIhDynXWqOvswmjRiTHj/1TOh1+0R26aKJ8vAVZRc4Ky5dQ5M5Bly1vrV/Klew6lThkA==}
     deprecated: This is a stub types definition. pino-http provides its own type definitions, so you do not need this installed.
 
-  '@types/prop-types@15.7.15':
-    resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
-
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
 
@@ -1338,8 +1335,8 @@ packages:
     peerDependencies:
       '@types/react': ^18.0.0
 
-  '@types/react@18.3.31':
-    resolution: {integrity: sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw==}
+  '@types/react@19.3.0':
+    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@types/send@1.2.1':
     resolution: {integrity: sha512-arsCikDvlU99zl1g69TcAB3mzZPpxgw0UQnaHeC1Nwb015xp8bknZv5rIfri9xTOcMuaVgvabfIRA7PSZVuZIQ==}
@@ -2564,8 +2561,8 @@ packages:
     peerDependencies:
       react: '>=16.8'
 
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
     engines: {node: '>=0.10.0'}
 
   read-cache@1.0.2:
@@ -3715,12 +3712,12 @@ snapshots:
 
   '@tanstack/query-core@5.105.0': {}
 
-  '@tanstack/react-query@5.105.0(@types/react@18.3.31)(react@18.3.1)':
+  '@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1)':
     dependencies:
       '@tanstack/query-core': 5.105.0
-      react: 18.3.1
+      react: 19.3.1
     optionalDependencies:
-      '@types/react': 18.3.31
+      '@types/react': 19.3.0
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -3807,19 +3804,16 @@ snapshots:
     dependencies:
       pino-http: 11.0.0
 
-  '@types/prop-types@15.7.15': {}
-
   '@types/qs@6.15.1': {}
 
   '@types/range-parser@1.2.7': {}
 
-  '@types/react-dom@18.3.7(@types/react@18.3.31)':
+  '@types/react-dom@18.3.7(@types/react@19.3.0)':
     dependencies:
-      '@types/react': 18.3.31
+      '@types/react': 19.3.0
 
-  '@types/react@18.3.31':
+  '@types/react@19.3.0':
     dependencies:
-      '@types/prop-types': 15.7.15
       csstype: 3.2.3
 
   '@types/send@1.2.1':
@@ -5015,29 +5009,27 @@ snapshots:
       iconv-lite: 0.7.3
       unpipe: 1.0.0
 
-  react-dom@18.3.1(react@18.3.1):
+  react-dom@18.3.1(react@19.3.1):
     dependencies:
       loose-envify: 1.4.0
-      react: 18.3.1
+      react: 19.3.1
       scheduler: 0.23.2
 
   react-refresh@0.17.0: {}
 
-  react-router-dom@6.30.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  react-router-dom@6.30.6(react-dom@18.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@remix-run/router': 1.23.4
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      react-router: 6.30.6(react@18.3.1)
+      react: 19.3.1
+      react-dom: 18.3.1(react@19.3.1)
+      react-router: 6.30.6(react@19.3.1)
 
-  react-router@6.30.6(react@18.3.1):
+  react-router@6.30.6(react@19.3.1):
     dependencies:
       '@remix-run/router': 1.23.4
-      react: 18.3.1
+      react: 19.3.1
 
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
+  react@19.3.1: {}
 
   read-cache@1.0.2: {}
 
