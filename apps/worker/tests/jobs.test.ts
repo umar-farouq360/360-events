@@ -33,6 +33,9 @@ beforeAll(async () => {
   await testSql.unsafe(`CREATE SCHEMA ${testSchema}`);
   testSchemaCreated = true;
   await testSql.unsafe(`SET search_path TO ${testSchema}, public`);
+  await Promise.all(
+    workerSqlClients.map((client) => client.unsafe(`SET search_path TO ${testSchema}, public`)),
+  );
  const migrationsDir = new URL('../../api/src/db/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDir))
   .filter((f) => f.endsWith('.sql'))

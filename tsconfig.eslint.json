@@ -1,7 +1,16 @@
 {
   "extends": "./packages/config/tsconfig.base.json",
   "compilerOptions": {
-    "allowJs": true
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "react-jsx",
+    "noEmit": true
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "eslint.config.mjs"]
+  "include": [
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "eslint.config.mjs",
+    "vitest.config.mjs"
+  ],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**"]
 }

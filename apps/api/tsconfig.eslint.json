@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "rootDir": "../..",
+    "paths": {
+      "@360events/api": ["./src/public.ts"],
+      "@360events/api/db": ["./src/db/index.ts"],
+      "@360events/api/logger": ["./src/lib/logger.ts"],
+      "@360events/api/jobs": ["./src/lib/jobs.ts"],
+      "@360events/api/schema": ["./src/db/schema/index.ts"],
+      "@360events/api/database-url": ["./src/config/database-url.ts"],
+      "@360events/types": ["../../packages/types/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs"],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**"]
+}

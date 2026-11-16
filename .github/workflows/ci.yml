@@ -100,7 +100,7 @@ jobs:
           APP_URL="postgres://app_service:ci-app-service-password@localhost:5435/360events_privileges_test"
 
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-            -c "CREATE DATABASE 360events_privileges_test"
+            -c 'CREATE DATABASE "360events_privileges_test"'
 
           psql "$ADMIN_URL" -v ON_ERROR_STOP=1 \
             -f scripts/database/provision-roles.sql

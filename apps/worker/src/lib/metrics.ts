@@ -1,5 +1,7 @@
 import { and, count, eq, gte, inArray, sql } from 'drizzle-orm';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { db } from '@360events/api/db';
+import type * as schema from '@360events/api/schema';
 import { outboxEvents, type OutboxEvent } from '@360events/api/schema';
 
 export interface OutboxMetrics {
@@ -11,15 +13,18 @@ export interface OutboxMetrics {
   oldestPendingAgeSeconds: number | null;
 }
 
-export async function getOutboxMetrics(now: Date = new Date()): Promise<OutboxMetrics> {
-  const grouped = await db
+export async function getOutboxMetrics(
+  now: Date = new Date(),
+  database: PostgresJsDatabase<typeof schema> = db,
+): Promise<OutboxMetrics> {
+  const grouped = await database
     .select({ status: outboxEvents.status, count: count() })
     .from(outboxEvents)
     .groupBy(outboxEvents.status);
 
   const byStatus = new Map(grouped.map((g) => [g.status, Number(g.count)]));
 
-  const [deadLetteredRow] = await db
+  const [deadLetteredRow] = await database
     .select({ count: count() })
     .from(outboxEvents)
     .where(
@@ -29,8 +34,13 @@ export async function getOutboxMetrics(now: Date = new Date()): Promise<OutboxMe
       ),
     );
 
-  const [oldestRow] = await db
-    .select({ oldest: sql<Date | null>`MIN(${outboxEvents.runAt})` })
+  const [oldestRow] = await database
+    .select({
+      oldest: sql<Date | null>`MIN(${outboxEvents.runAt})`.mapWith((value) => {
+        if (value === null) return null;
+        return value instanceof Date ? value : new Date(String(value));
+      }),
+    })
     .from(outboxEvents)
     .where(eq(outboxEvents.status, 'pending'));
 
@@ -54,13 +64,16 @@ export interface InspectJobsOptions {
   limit?: number;
 }
 
-export async function inspectJobs(options: InspectJobsOptions = {}): Promise<OutboxEvent[]> {
+export async function inspectJobs(
+  options: InspectJobsOptions = {},
+  database: PostgresJsDatabase<typeof schema> = db,
+): Promise<OutboxEvent[]> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 500);
   const conditions = [];
   if (options.status) conditions.push(eq(outboxEvents.status, options.status));
   if (options.types && options.types.length > 0) conditions.push(inArray(outboxEvents.type, options.types));
 
-  const base = db.select().from(outboxEvents);
+  const base = database.select().from(outboxEvents);
   const query = conditions.length > 0 ? base.where(and(...conditions)) : base;
   return query.orderBy(outboxEvents.runAt).limit(limit);
 }
