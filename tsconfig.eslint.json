@@ -4,22 +4,9 @@
     "allowJs": true,
     "checkJs": false,
     "jsx": "react-jsx",
-    "noEmit": true,
-    "paths": {
-      "@360events/api": ["./apps/api/src/public.ts"],
-      "@360events/api/db": ["./apps/api/src/db/index.ts"],
-      "@360events/api/logger": ["./apps/api/src/lib/logger.ts"],
-      "@360events/api/jobs": ["./apps/api/src/lib/jobs.ts"],
-      "@360events/api/schema": ["./apps/api/src/db/schema/index.ts"],
-      "@360events/api/database-url": ["./apps/api/src/config/database-url.ts"],
-      "@360events/types": ["./packages/types/src/index.ts"]
-    }
+    "noEmit": true
   },
   "include": [
-    "apps/**/*.ts",
-    "apps/**/*.tsx",
-    "apps/**/*.js",
-    "apps/**/*.mjs",
     "packages/**/*.ts",
     "packages/**/*.tsx",
     "eslint.config.mjs",
